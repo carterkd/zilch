@@ -1,0 +1,27 @@
+Start with 10 dice. You roll all. 
+1's are worth 100, 5's are worth 50. 
+a run (1 through 6) is worth 1500 (must all be in one roll). 
+3 1's is 1000. 
+4 of any other number is 1000. 
+5 of any number is 2000 (including ones). 
+6 of any number is 3000 (including ones). 
+7 of any number is 4000 (including ones). 
+8 of any number is 5000 (including ones). 
+9 of any number is 6000 (including ones). 
+10 of any number is 7000 (including ones). 
+3 2's is 200
+3 3's is 300
+3 4's is 400
+3 5's is 500
+3 6's is 600
+roll and you've got to get some points, otherwise you zilch. 
+if you keep all 10, then you lock, and you get roll again and get more points. 
+first to 20,000 wins, except first to 20,000, then everyone else gets one more turn. 
+each person decides to roll all 10, or roll free dice from the earlier turn, and get all points of earlier player plus anything that counts. 
+each player decides which dice to count versus roll. 
+
+
+
+
+
+

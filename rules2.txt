@@ -1,0 +1,119 @@
+### **Zilch: Game Rules**
+
+#### **Objective**
+Be the first player to reach 20,000 points. If someone reaches 20,000, all other players get one last turn to try and beat their score.
+
+---
+
+### **Setup**
+1. Use 10 six-sided dice.
+2. Each player rolls all 10 dice. The player with the highest total starts the game.
+3. Keep a pen and paper to track scores.
+
+---
+
+### **Scoring**
+- **Single Dice:**
+  - A 1 is worth 100 points.
+  - A 5 is worth 50 points.
+
+- **Straight (Run):**
+  - Rolling a run of all numbers from 1 to 6 in a single roll is worth 1,500 points.
+
+- **Triples:**
+  - Three 1's: 1,000 points.
+  - Three 2's: 200 points.
+  - Three 3's: 300 points.
+  - Three 4's: 400 points.
+  - Three 5's: 500 points.
+  - Three 6's: 600 points.
+
+- **Four or More of Any Number:**
+  - 4 of any number: 1,000 points.
+  - 5 of any number: 2,000 points.
+  - 6 of any number: 3,000 points.
+  - 7 of any number: 4,000 points.
+  - 8 of any number: 5,000 points.
+  - 9 of any number: 6,000 points.
+  - 10 of any number: 7,000 points.
+
+---
+
+### **Gameplay**
+
+#### **Rolling and Scoring**
+1. **Start of Turn:**
+   - Players can either:
+     - Roll all 10 dice fresh, OR
+     - Build off the previous player’s turn by rolling the free dice that the previous player did not score.
+
+2. **Scoring Rules:**
+   - After rolling, identify scoring dice (1's, 5's, triples, straights, etc.).
+   - You must set aside at least one scoring die or scoring group per roll.
+   - Dice that could score but are not set aside are considered "free dice" and may be re-rolled.
+
+3. **Building Off the Previous Turn:**
+   - If a player builds off the previous player’s turn, they inherit the previous player’s locked points.
+   - Example: If the previous player locked 2,000 points, scored 400 additional points with four dice, and stopped, the next player can roll the 6 free dice. If the new player scores with these dice without zilching, their points will be added to 2,400 (the previous total).
+
+4. **Re-Rolling Free Dice:**
+   - Continue rolling free dice until:
+     - You choose to stop and bank your points, OR
+     - You set aside all 10 dice and "lock," allowing you to roll all 10 dice again, OR
+     - You zilch (fail to roll any scoring dice).
+
+---
+
+#### **Zilching**
+- If you roll and no dice score, you zilch.
+- A zilch ends your turn, and you lose all unbanked points earned during that turn.
+- **Important:** If a player zilches, the next player **must roll all 10 dice fresh** and cannot build on the previous player's turn.
+
+---
+
+#### **Locking Points**
+- When you use all 10 dice for scoring, you "lock" your points.
+- Locked points cannot be lost, even if you later zilch during re-rolls.
+
+---
+
+### **Winning the Game**
+- The first player to reach 20,000 points triggers the final round.
+- Each remaining player gets one last turn to try and exceed that score.
+- The player with the highest score after the final round wins.
+
+---
+
+### **Additional Notes**
+1. **Dice Selection:**
+   - Players can decide which scoring dice to set aside and which potentially scoring dice to re-roll as free dice.
+   - For example, you may choose to re-roll a single 1 (worth 100 points) instead of setting it aside.
+
+2. **Carrying Over Points:**
+   - Points from previous players’ locked and unzilched turns are carried forward when rolling free dice.
+
+---
+
+### **Example Turns**
+
+#### **Example 1: Successful Turn**
+1. Player A rolls all 10 dice and gets: 1, 1, 5, 2, 2, 2, 3, 4, 6, 6.
+2. Player A sets aside:
+   - Two 1's (200 points), the 5 (50 points), and three 2's (200 points), scoring 450 points.
+   - The remaining 4 dice are free dice.
+3. Player A rolls the 4 free dice and scores 300 more points (e.g., a triple 3), bringing their total to 750 points.
+4. Player A chooses to stop and bank their 750 points.
+
+#### **Example 2: Building Off a Previous Turn**
+1. Player B chooses to build off Player A’s turn.
+2. Player B inherits 750 locked points and rolls the 6 free dice from Player A’s turn.
+3. Player B scores with the 6 dice, adding their points to Player A’s 750.
+
+#### **Example 3: Zilch**
+1. Player C rolls all 10 dice and gets no scoring dice, resulting in a zilch.
+2. Player C’s turn ends with no points.
+3. **Player D must roll all 10 dice fresh**, as Player C’s zilch means there are no points to build on.
+
+---
+
+Enjoy *Zilch*!
