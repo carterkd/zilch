@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zilch</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d89b2b'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23191816'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23191816'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23191816'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260617-player-cells">
+    <link rel="stylesheet" href="styles.css?v=20260617-device-players">
   </head>
   <body>
     <main class="app-shell">
@@ -18,21 +18,31 @@
 
         <section class="mode-panel" aria-label="Play mode">
           <button id="local-mode" class="mode-card primary-action" type="button">
-            <strong>Share this device</strong>
-            <span>Pass one screen around the table.</span>
+            <strong>Everyone shares this device</strong>
+            <span>All players use this screen.</span>
           </button>
           <button id="create-room-mode" class="mode-card" type="button">
-            <strong>Create a room</strong>
-            <span>Host a game and share a room code.</span>
+            <strong>Create online room</strong>
+            <span>Host a game. This device can bring one or more players.</span>
           </button>
           <button id="join-room-mode" class="mode-card" type="button">
-            <strong>Join a room</strong>
-            <span>Enter a code from another player.</span>
+            <strong>Join online room</strong>
+            <span>Enter a code and add the players using this device.</span>
           </button>
 
           <div id="online-room-panel" class="online-room-panel hidden">
             <h2 id="online-room-title">Online rooms</h2>
             <p id="online-room-copy">Online rooms need a realtime backend before they can sync across devices.</p>
+            <div class="device-player-block">
+              <div class="setup-label-row">
+                <label for="online-player-1">Players on this device</label>
+                <button id="add-online-player" type="button">Add player</button>
+              </div>
+              <div id="online-player-list" class="player-list compact-player-list">
+                <input id="online-player-1" class="player-name-input online-player-name-input" type="text" value="Kent" autocomplete="off" spellcheck="false">
+                <input class="player-name-input online-player-name-input" type="text" value="Sonja" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
             <div class="room-code-row">
               <input id="room-code-input" type="text" inputmode="latin" maxlength="8" placeholder="Room code" autocomplete="off" spellcheck="false">
               <button id="room-action" type="button">Continue</button>
@@ -143,6 +153,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260617-secure-random"></script>
+    <script src="app.js?v=20260617-device-players"></script>
   </body>
 </html>

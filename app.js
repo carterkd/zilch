@@ -219,10 +219,11 @@
     return unique.length ? unique : ["Kent", "Sonja"];
   }
 
-  function addPlayerInput(value = "") {
-    const list = document.getElementById("player-list");
+  function addPlayerInput(value = "", listId = "player-list", extraClass = "") {
+    const list = document.getElementById(listId);
+    if (!list) return;
     const input = document.createElement("input");
-    input.className = "player-name-input";
+    input.className = ["player-name-input", extraClass].filter(Boolean).join(" ");
     input.type = "text";
     input.value = value;
     input.autocomplete = "off";
@@ -233,13 +234,17 @@
   }
 
   function getSetupPlayerNames() {
-    return parsePlayers(Array.from(document.querySelectorAll(".player-name-input")).map((input) => input.value));
+    return parsePlayers(Array.from(document.querySelectorAll("#player-list .player-name-input")).map((input) => input.value));
+  }
+
+  function getOnlineDevicePlayerNames() {
+    return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value));
   }
 
   function showSetupScreen() {
     document.getElementById("mode-screen").classList.add("hidden");
     document.getElementById("setup-screen").classList.remove("hidden");
-    const firstInput = document.querySelector(".player-name-input");
+    const firstInput = document.querySelector("#player-list .player-name-input");
     if (firstInput) firstInput.focus();
   }
 
@@ -252,15 +257,37 @@
     const hasFirebase = Boolean(window.ZILCH_FIREBASE_CONFIG);
 
     panel.classList.remove("hidden");
-    title.textContent = mode === "create" ? "Create a room" : "Join a room";
+    panel.dataset.mode = mode;
+    title.textContent = mode === "create" ? "Create online room" : "Join online room";
     action.textContent = mode === "create" ? "Create room" : "Join room";
     input.classList.toggle("hidden", mode === "create");
     input.value = "";
     copy.textContent = hasFirebase
-      ? "Online room setup is ready for the realtime sync layer."
-      : "To sync across devices, this branch needs Firebase Realtime Database config. Shared-device play still works now.";
+      ? "Add everyone playing from this device before connecting to the room."
+      : "Online sync still needs Firebase config. You can already set who is playing from this device.";
     action.disabled = !hasFirebase;
+    const firstDevicePlayer = document.querySelector("#online-player-list .player-name-input");
     if (mode === "join" && hasFirebase) input.focus();
+    else if (firstDevicePlayer) firstDevicePlayer.focus();
+  }
+
+  function handleRoomAction() {
+    const panel = document.getElementById("online-room-panel");
+    const input = document.getElementById("room-code-input");
+    const mode = panel.dataset.mode || "create";
+    const roomCode = input.value.trim().toUpperCase();
+    const devicePlayers = getOnlineDevicePlayerNames();
+
+    if (mode === "join" && !roomCode) {
+      input.focus();
+      return;
+    }
+
+    window.ZILCH_PENDING_ROOM = {
+      mode,
+      roomCode,
+      devicePlayers
+    };
   }
 
   function rollForFirst(names) {
@@ -870,6 +897,10 @@
     });
 
     document.getElementById("add-player").addEventListener("click", () => addPlayerInput());
+    document
+      .getElementById("add-online-player")
+      .addEventListener("click", () => addPlayerInput("", "online-player-list", "online-player-name-input"));
+    document.getElementById("room-action").addEventListener("click", handleRoomAction);
     document.getElementById("fresh-turn").addEventListener("click", () => acceptInheritedTurn(false));
     document.getElementById("build-turn").addEventListener("click", () => acceptInheritedTurn(true));
     document.getElementById("roll-dice").addEventListener("click", rollForTurn);
