@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zilch</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d89b2b'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23191816'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23191816'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23191816'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260617-device-players">
+    <link rel="stylesheet" href="styles.css?v=20260617-remote-turns">
   </head>
   <body>
     <main class="app-shell">
@@ -124,6 +124,15 @@
               </div>
             </div>
 
+            <div id="remote-turn-panel" class="remote-turn-panel hidden">
+              <div class="remote-turn-copy">
+                <p id="remote-turn-label" class="eyebrow">Waiting on another device</p>
+                <h2 id="remote-turn-title">Player is rolling</h2>
+                <p id="remote-turn-copy"></p>
+              </div>
+              <div id="remote-turn-dice" class="remote-turn-dice" aria-label="Remote player dice"></div>
+            </div>
+
             <div id="offer-panel" class="decision-panel hidden">
               <h2 id="offer-title">Build or start fresh?</h2>
               <p id="offer-text"></p>
@@ -153,6 +162,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260617-device-players"></script>
+    <script src="app.js?v=20260617-remote-turns"></script>
   </body>
 </html>

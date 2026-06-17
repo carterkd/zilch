@@ -22,7 +22,11 @@
     turn: null,
     gameOver: false,
     log: [],
-    autoChoice: null
+    autoChoice: null,
+    room: {
+      mode: "local",
+      devicePlayers: []
+    }
   };
 
   function formatScore(value) {
@@ -449,11 +453,31 @@
     return state.players[state.currentIndex];
   }
 
+  function isRoomMode() {
+    return state.room && state.room.mode === "online";
+  }
+
+  function isPlayerOnThisDevice(playerName) {
+    return !isRoomMode() || state.room.devicePlayers.includes(playerName);
+  }
+
+  function isCurrentTurnLocal() {
+    const player = currentPlayer();
+    return Boolean(player && isPlayerOnThisDevice(player.name));
+  }
+
+  function setRoomContext(mode, devicePlayers) {
+    state.room = {
+      mode,
+      devicePlayers: mode === "online" ? parsePlayers(devicePlayers) : []
+    };
+  }
+
   function allFinalTurnsPlayed() {
     return state.players.length > 0 && state.players.every((player) => state.playedFinalTurns[player.name]);
   }
 
-  function startGameFromOrder(orderedNames, orderDetail) {
+  function startGameFromOrder(orderedNames, orderDetail, roomContext = { mode: "local", devicePlayers: [] }) {
     state.players = orderedNames.map((name) => ({ name, score: 0 }));
     state.currentIndex = 0;
     state.finalRound = false;
@@ -464,12 +488,72 @@
     state.turn = null;
     state.gameOver = false;
     state.log = [];
+    setRoomContext(roomContext.mode || "local", roomContext.devicePlayers || []);
     clearAutoChoiceTimer();
     addLog(orderDetail);
 
     document.getElementById("setup-screen").classList.add("hidden");
     document.getElementById("game-screen").classList.remove("hidden");
     prepareNextTurn();
+  }
+
+  function normalizeSnapshotPlayers(players) {
+    if (!Array.isArray(players) || !players.length) {
+      return parsePlayers([]).map((name) => ({ name, score: 0 }));
+    }
+
+    return players
+      .map((player) => {
+        if (typeof player === "string") return { name: player.trim(), score: 0 };
+        return {
+          name: String(player.name || "").trim(),
+          score: Number(player.score || 0)
+        };
+      })
+      .filter((player) => player.name);
+  }
+
+  function renderRoomSnapshot(snapshot) {
+    const next = snapshot || {};
+    const players = normalizeSnapshotPlayers(next.players);
+    const currentIndex = Number.isInteger(next.currentIndex) ? next.currentIndex : 0;
+    const turn = next.turn || {};
+    const dice = Array.isArray(turn.dice) ? turn.dice.slice() : [];
+    const phase = turn.phase || "await-roll";
+    const options = Array.isArray(turn.options)
+      ? cloneCombos(turn.options)
+      : phase === "choose-option"
+        ? calculateScoreRecursive(dice)
+        : [];
+
+    state.players = players;
+    state.currentIndex = Math.min(Math.max(currentIndex, 0), players.length - 1);
+    state.finalRound = Boolean(next.finalRound);
+    state.playedFinalTurns = next.playedFinalTurns || Object.fromEntries(players.map((player) => [player.name, false]));
+    state.inheritedScore = Number(next.inheritedScore || 0);
+    state.inheritedFreeDice = Number(next.inheritedFreeDice || 10);
+    state.previousTurnPlayer = String(next.previousTurnPlayer || "");
+    state.gameOver = Boolean(next.gameOver);
+    state.log = Array.isArray(next.log) ? next.log.slice(0, 10) : [];
+    setRoomContext("online", next.room && next.room.devicePlayers ? next.room.devicePlayers : []);
+    state.turn = {
+      playerName: turn.playerName || players[state.currentIndex].name,
+      inheritedScore: Number(turn.inheritedScore || 0),
+      lockedPoints: Number(turn.lockedPoints || 0),
+      looseScore: Number(turn.looseScore || 0),
+      freeDice: Number(turn.freeDice || 10),
+      dice,
+      options,
+      selectedOptionIndex: Number.isInteger(turn.selectedOptionIndex) ? turn.selectedOptionIndex : null,
+      phase,
+      rollId: Number(turn.rollId || 0)
+    };
+
+    clearAutoChoiceTimer();
+    document.getElementById("mode-screen").classList.add("hidden");
+    document.getElementById("setup-screen").classList.add("hidden");
+    document.getElementById("game-screen").classList.remove("hidden");
+    render();
   }
 
   async function startGame(names, orderMode) {
@@ -502,6 +586,7 @@
   function acceptInheritedTurn(build) {
     const turn = state.turn;
     if (!turn || turn.phase !== "offer") return;
+    if (!isCurrentTurnLocal()) return;
 
     if (build) {
       turn.looseScore = state.inheritedScore;
@@ -519,6 +604,7 @@
   function rollForTurn() {
     const turn = state.turn;
     if (!turn || !["await-roll", "choose-next"].includes(turn.phase)) return;
+    if (!isCurrentTurnLocal()) return;
     clearAutoChoiceTimer();
 
     turn.dice = rollDice(turn.freeDice);
@@ -541,6 +627,7 @@
   function selectOption(index) {
     const turn = state.turn;
     if (!turn || turn.phase !== "choose-option") return;
+    if (!isCurrentTurnLocal()) return;
     const option = turn.options[index];
     if (!option) return;
     clearAutoChoiceTimer();
@@ -568,6 +655,7 @@
   function finishTurn(zilched) {
     const turn = state.turn;
     if (!turn) return;
+    if (!isCurrentTurnLocal()) return;
     clearAutoChoiceTimer();
     const player = currentPlayer();
     const earned = zilched ? turn.lockedPoints : turn.lockedPoints + turn.looseScore;
@@ -714,6 +802,55 @@
     values.forEach((value) => diceRow.appendChild(createDie(value)));
   }
 
+  function remoteTurnSummary(turn) {
+    if (!turn) return "";
+    if (turn.phase === "offer") {
+      return `${turn.playerName} is choosing whether to build on ${formatScore(state.inheritedScore)} or roll all 10.`;
+    }
+    if (turn.phase === "await-roll") {
+      return `${turn.playerName} has ${turn.freeDice} dice ready.`;
+    }
+    if (turn.phase === "choose-option") {
+      return `${turn.playerName} rolled ${turn.dice.join(", ")} and is choosing a score.`;
+    }
+    if (turn.phase === "choose-next") {
+      return `${turn.playerName} has ${formatScore(turn.looseScore)} loose with ${turn.freeDice} dice free.`;
+    }
+    if (turn.phase === "zilch") {
+      return `${turn.playerName} rolled ${turn.dice.join(", ")} and zilched.`;
+    }
+    return "";
+  }
+
+  function renderRemoteTurnPanel() {
+    const panel = document.getElementById("remote-turn-panel");
+    const label = document.getElementById("remote-turn-label");
+    const title = document.getElementById("remote-turn-title");
+    const copy = document.getElementById("remote-turn-copy");
+    const dice = document.getElementById("remote-turn-dice");
+    const turn = state.turn;
+    const isRemoteTurn = Boolean(turn && isRoomMode() && !isCurrentTurnLocal() && !state.gameOver);
+
+    panel.classList.toggle("hidden", !isRemoteTurn);
+    if (!isRemoteTurn) return;
+
+    panel.classList.toggle("zilch", turn.phase === "zilch");
+    label.textContent = "Waiting on another device";
+    title.textContent = `${turn.playerName}'s move`;
+    copy.textContent = remoteTurnSummary(turn);
+    dice.innerHTML = "";
+
+    if (turn.dice.length) {
+      turn.dice.forEach((value) => dice.appendChild(createDie(value, true)));
+      return;
+    }
+
+    const waiting = document.createElement("span");
+    waiting.className = "remote-waiting";
+    waiting.textContent = `${turn.freeDice} dice ready`;
+    dice.appendChild(waiting);
+  }
+
   function renderScores() {
     const scoreStrip = document.getElementById("score-strip");
     scoreStrip.innerHTML = "";
@@ -721,8 +858,18 @@
       const card = document.createElement("article");
       card.className = "score-card";
       if (index === state.currentIndex && !state.gameOver) card.classList.add("active");
+      if (isRoomMode() && isPlayerOnThisDevice(player.name)) card.classList.add("on-this-device");
       if (state.finalRound && state.playedFinalTurns[player.name]) card.classList.add("final-done");
-      card.innerHTML = `<span>${player.name}</span><strong>${formatScore(player.score)}</strong>`;
+      const name = document.createElement("span");
+      name.textContent = player.name;
+      const score = document.createElement("strong");
+      score.textContent = formatScore(player.score);
+      card.append(name, score);
+      if (isRoomMode() && isPlayerOnThisDevice(player.name)) {
+        const badge = document.createElement("small");
+        badge.textContent = "This device";
+        card.appendChild(badge);
+      }
       scoreStrip.appendChild(card);
     });
   }
@@ -732,11 +879,14 @@
     panel.innerHTML = "";
     const turn = state.turn;
     if (!turn || turn.phase !== "choose-option") return;
+    const localTurn = isCurrentTurnLocal();
 
     turn.options.forEach((option, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "option-card";
+      button.disabled = !localTurn;
+      if (!localTurn) button.classList.add("remote-option");
       button.addEventListener("click", () => selectOption(index));
 
       const head = document.createElement("div");
@@ -754,13 +904,13 @@
       meta.textContent = option.descriptions.join(" + ");
       button.appendChild(meta);
 
-      if (turn.options.length === 1) {
+      if (localTurn && turn.options.length === 1) {
         appendCountdown(button, "Auto picks in 10");
       }
       panel.appendChild(button);
     });
 
-    if (turn.options.length === 1) {
+    if (localTurn && turn.options.length === 1) {
       const rollId = turn.rollId || 0;
       startAutoActionTimer(`score:${rollId}`, "Auto picks in", () => {
         const activeTurn = state.turn;
@@ -768,7 +918,7 @@
           selectOption(0);
         }
       });
-    } else {
+    } else if (localTurn) {
       clearAutoChoiceTimer();
     }
   }
@@ -790,8 +940,9 @@
     const bankButton = document.getElementById("bank-turn");
     const rollPanel = document.getElementById("roll-panel");
     const rollMessage = document.getElementById("roll-message");
+    const localTurn = isCurrentTurnLocal();
 
-    offerPanel.classList.toggle("hidden", !turn || turn.phase !== "offer");
+    offerPanel.classList.toggle("hidden", !turn || turn.phase !== "offer" || !localTurn);
     rollPanel.classList.toggle("hidden", !turn || turn.phase === "offer" || turn.phase === "game-over");
 
     if (turn && turn.phase === "offer") {
@@ -804,8 +955,8 @@
     rollMessage.classList.toggle("zilch", Boolean(turn && turn.phase === "zilch"));
     rollMessage.textContent = turn && turn.phase === "zilch" ? "Zilch!" : "";
 
-    rollButton.disabled = !turn || !["await-roll", "choose-next"].includes(turn.phase);
-    bankButton.disabled = !turn || !["choose-next", "zilch"].includes(turn.phase);
+    rollButton.disabled = !turn || !localTurn || !["await-roll", "choose-next"].includes(turn.phase);
+    bankButton.disabled = !turn || !localTurn || !["choose-next", "zilch"].includes(turn.phase);
 
     const rollText = turn && turn.freeDice > 0 ? `Roll ${turn.freeDice}` : "Roll";
     const bankText = turn && turn.phase === "zilch" ? "Accept Zilch" : "Bank";
@@ -813,6 +964,13 @@
     setButtonContents(bankButton, bankText);
 
     if (!turn) {
+      clearAutoChoiceTimer();
+      return;
+    }
+
+    if (!localTurn) {
+      setButtonContents(rollButton, "Waiting");
+      setButtonContents(bankButton, "Watching");
       clearAutoChoiceTimer();
       return;
     }
@@ -866,6 +1024,7 @@
 
     renderScores();
     renderDice(turn ? turn.dice : []);
+    renderRemoteTurnPanel();
     renderOptions();
     renderTurnControls();
     renderGameOver();
@@ -911,6 +1070,7 @@
 
   if (typeof document !== "undefined") {
     bindEvents();
+    window.ZILCH_RENDER_ROOM_SNAPSHOT = renderRoomSnapshot;
   }
 
   if (typeof module !== "undefined") {
@@ -918,7 +1078,8 @@
       calculateScoreRecursive,
       rollDice,
       rollForFirst,
-      parsePlayers
+      parsePlayers,
+      renderRoomSnapshot
     };
   }
 }());

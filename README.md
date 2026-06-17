@@ -24,3 +24,4 @@ That keeps the normal pass-and-play table intact while allowing mixed setups, su
 
 The current branch is prepared for Firebase Realtime Database config via `firebase-config.js`.
 Copy `firebase-config.example.js` to `firebase-config.js` and fill in the Firebase web app values when ready.
+The room UI can render backend state with `window.ZILCH_RENDER_ROOM_SNAPSHOT(snapshot)`, including read-only waiting views for players on other devices.
