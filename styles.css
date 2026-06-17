@@ -128,6 +128,66 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
+.mode-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  display: grid;
+  gap: .75rem;
+  padding: clamp(1rem, 2.8vw, 1.5rem);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgb(255 253 250 / 82%);
+  box-shadow: var(--shadow);
+}
+
+.mode-card {
+  min-height: 5.2rem;
+  display: grid;
+  gap: .25rem;
+  justify-items: start;
+  align-content: center;
+  padding: .9rem 1rem;
+  text-align: left;
+}
+
+.mode-card strong {
+  font-size: 1.1rem;
+}
+
+.mode-card span,
+.online-room-panel p {
+  color: var(--muted);
+  font-size: .92rem;
+  font-weight: 650;
+}
+
+.online-room-panel {
+  display: grid;
+  gap: .75rem;
+  margin-top: .35rem;
+  padding: .9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+
+.online-room-panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.online-room-panel p {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.room-code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .65rem;
+}
+
 .setup-label-row {
   display: flex;
   align-items: center;
@@ -157,7 +217,8 @@ button:disabled {
   padding: .1rem .15rem .25rem .1rem;
 }
 
-.player-name-input {
+.player-name-input,
+#room-code-input {
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -170,7 +231,8 @@ button:disabled {
   font-weight: 750;
 }
 
-.player-name-input:focus {
+.player-name-input:focus,
+#room-code-input:focus {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgb(216 155 43 / 18%);
@@ -659,7 +721,8 @@ button:disabled {
   }
 
   .setup-actions,
-  .action-row {
+  .action-row,
+  .room-code-row {
     grid-template-columns: 1fr;
   }
 }

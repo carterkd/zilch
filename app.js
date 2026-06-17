@@ -236,6 +236,33 @@
     return parsePlayers(Array.from(document.querySelectorAll(".player-name-input")).map((input) => input.value));
   }
 
+  function showSetupScreen() {
+    document.getElementById("mode-screen").classList.add("hidden");
+    document.getElementById("setup-screen").classList.remove("hidden");
+    const firstInput = document.querySelector(".player-name-input");
+    if (firstInput) firstInput.focus();
+  }
+
+  function showOnlineRoomPanel(mode) {
+    const panel = document.getElementById("online-room-panel");
+    const title = document.getElementById("online-room-title");
+    const copy = document.getElementById("online-room-copy");
+    const action = document.getElementById("room-action");
+    const input = document.getElementById("room-code-input");
+    const hasFirebase = Boolean(window.ZILCH_FIREBASE_CONFIG);
+
+    panel.classList.remove("hidden");
+    title.textContent = mode === "create" ? "Create a room" : "Join a room";
+    action.textContent = mode === "create" ? "Create room" : "Join room";
+    input.classList.toggle("hidden", mode === "create");
+    input.value = "";
+    copy.textContent = hasFirebase
+      ? "Online room setup is ready for the realtime sync layer."
+      : "To sync across devices, this branch needs Firebase Realtime Database config. Shared-device play still works now.";
+    action.disabled = !hasFirebase;
+    if (mode === "join" && hasFirebase) input.focus();
+  }
+
   function rollForFirst(names) {
     return rollForFirstWithHistory(names).result;
   }
@@ -819,6 +846,10 @@
   }
 
   function bindEvents() {
+    document.getElementById("local-mode").addEventListener("click", showSetupScreen);
+    document.getElementById("create-room-mode").addEventListener("click", () => showOnlineRoomPanel("create"));
+    document.getElementById("join-room-mode").addEventListener("click", () => showOnlineRoomPanel("join"));
+
     document.getElementById("setup-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const submitter = event.submitter;

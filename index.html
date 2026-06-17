@@ -9,11 +9,43 @@
   </head>
   <body>
     <main class="app-shell">
-      <section id="setup-screen" class="setup-band" aria-labelledby="setup-title">
+      <section id="mode-screen" class="setup-band" aria-labelledby="mode-title">
         <div class="setup-copy">
           <p class="eyebrow">10 dice to 20,000</p>
-          <h1 id="setup-title">Zilch</h1>
-          <p class="setup-line">Score, bank, lock, or lose the loose points.</p>
+          <h1 id="mode-title">Zilch</h1>
+          <p class="setup-line">Choose one table, one room, one gloriously risky roll.</p>
+        </div>
+
+        <section class="mode-panel" aria-label="Play mode">
+          <button id="local-mode" class="mode-card primary-action" type="button">
+            <strong>Share this device</strong>
+            <span>Pass one screen around the table.</span>
+          </button>
+          <button id="create-room-mode" class="mode-card" type="button">
+            <strong>Create a room</strong>
+            <span>Host a game and share a room code.</span>
+          </button>
+          <button id="join-room-mode" class="mode-card" type="button">
+            <strong>Join a room</strong>
+            <span>Enter a code from another player.</span>
+          </button>
+
+          <div id="online-room-panel" class="online-room-panel hidden">
+            <h2 id="online-room-title">Online rooms</h2>
+            <p id="online-room-copy">Online rooms need a realtime backend before they can sync across devices.</p>
+            <div class="room-code-row">
+              <input id="room-code-input" type="text" inputmode="latin" maxlength="8" placeholder="Room code" autocomplete="off" spellcheck="false">
+              <button id="room-action" type="button">Continue</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="setup-screen" class="setup-band hidden" aria-labelledby="setup-title">
+        <div class="setup-copy">
+          <p class="eyebrow">Shared device</p>
+          <h1 id="setup-title">Table</h1>
+          <p class="setup-line">Add the players, choose the order, and start rolling.</p>
         </div>
 
         <form id="setup-form" class="setup-form">

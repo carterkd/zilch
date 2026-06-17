@@ -15,3 +15,10 @@ The script starts a local static server and opens the game in Chrome.
 ## GitHub Pages
 
 This is a static site. It can be hosted from the repository root with GitHub Pages.
+
+## Online Rooms
+
+The shared-device mode works as a static site. Cross-device room-code play needs a realtime backend.
+
+The current branch is prepared for Firebase Realtime Database config via `firebase-config.js`.
+Copy `firebase-config.example.js` to `firebase-config.js` and fill in the Firebase web app values when ready.
