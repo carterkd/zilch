@@ -29,8 +29,27 @@
     return Number(value || 0).toLocaleString("en-US");
   }
 
+  function secureRandomInt(maxExclusive) {
+    if (!Number.isInteger(maxExclusive) || maxExclusive <= 0) {
+      throw new Error("maxExclusive must be a positive integer");
+    }
+
+    const cryptoApi = globalThis.crypto;
+    if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+      const range = 0x100000000;
+      const limit = range - (range % maxExclusive);
+      const values = new Uint32Array(1);
+      do {
+        cryptoApi.getRandomValues(values);
+      } while (values[0] >= limit);
+      return values[0] % maxExclusive;
+    }
+
+    return Math.floor(Math.random() * maxExclusive);
+  }
+
   function rollDice(numDice) {
-    return Array.from({ length: numDice }, () => Math.floor(Math.random() * 6) + 1).sort((a, b) => a - b);
+    return Array.from({ length: numDice }, () => secureRandomInt(6) + 1).sort((a, b) => a - b);
   }
 
   function countsFor(dice) {
@@ -266,7 +285,7 @@
   function shuffleNames(names) {
     const shuffled = names.slice();
     for (let i = shuffled.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = secureRandomInt(i + 1);
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
