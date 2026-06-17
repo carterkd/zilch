@@ -10,6 +10,8 @@
   };
   const scoreCache = new Map();
   const AUTO_ACTION_MS = 10000;
+  const FIREBASE_SDK_VERSION = "12.15.0";
+  const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
   const state = {
     players: [],
@@ -26,6 +28,17 @@
     room: {
       mode: "local",
       devicePlayers: []
+    },
+    online: {
+      firebase: null,
+      db: null,
+      roomCode: "",
+      deviceId: "",
+      isHost: false,
+      devicePlayers: [],
+      roomData: null,
+      unsubscribe: null,
+      isApplyingRemote: false
     }
   };
 
@@ -223,6 +236,84 @@
     return unique.length ? unique : ["Kent", "Sonja"];
   }
 
+  function hasFirebaseConfig() {
+    const config = window.ZILCH_FIREBASE_CONFIG;
+    return Boolean(
+      config &&
+        config.apiKey &&
+        !String(config.apiKey).includes("YOUR_") &&
+        config.databaseURL &&
+        !String(config.databaseURL).includes("YOUR_") &&
+        config.projectId &&
+        !String(config.projectId).includes("YOUR_") &&
+        config.appId &&
+        !String(config.appId).includes("YOUR_")
+    );
+  }
+
+  async function loadFirebase() {
+    if (state.online.firebase && state.online.db) return state.online;
+    if (!hasFirebaseConfig()) {
+      throw new Error("Firebase config is missing. Fill in firebase-config.js first.");
+    }
+
+    const [appModule, databaseModule] = await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-database.js`)
+    ]);
+    const app = appModule.getApps().length
+      ? appModule.getApp()
+      : appModule.initializeApp(window.ZILCH_FIREBASE_CONFIG);
+
+    state.online.firebase = databaseModule;
+    state.online.db = databaseModule.getDatabase(app);
+    return state.online;
+  }
+
+  function generateDeviceId() {
+    try {
+      const existing = window.localStorage.getItem("zilchDeviceId");
+      if (existing) return existing;
+      const next = `device-${secureRandomInt(0xffffffff).toString(36)}-${Date.now().toString(36)}`;
+      window.localStorage.setItem("zilchDeviceId", next);
+      return next;
+    } catch (error) {
+      return `device-${secureRandomInt(0xffffffff).toString(36)}-${Date.now().toString(36)}`;
+    }
+  }
+
+  function generateRoomCode(length = 5) {
+    return Array.from({ length }, () => ROOM_CODE_ALPHABET[secureRandomInt(ROOM_CODE_ALPHABET.length)]).join("");
+  }
+
+  function listValues(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter((item) => item !== undefined && item !== null);
+    if (typeof value === "object") return Object.values(value);
+    return [];
+  }
+
+  function roomPlayerNames(roomData) {
+    const devices = roomData && roomData.devices ? listValues(roomData.devices) : [];
+    const unique = [];
+    devices
+      .flatMap((device) => listValues(device.players))
+      .map((name) => String(name).trim())
+      .filter(Boolean)
+      .forEach((name) => {
+        if (!unique.includes(name)) unique.push(name);
+      });
+    return unique;
+  }
+
+  function roomRef(roomCode = state.online.roomCode) {
+    return state.online.firebase.ref(state.online.db, `rooms/${roomCode}`);
+  }
+
+  function roomDeviceRef(roomCode = state.online.roomCode, deviceId = state.online.deviceId) {
+    return state.online.firebase.ref(state.online.db, `rooms/${roomCode}/devices/${deviceId}`);
+  }
+
   function addPlayerInput(value = "", listId = "player-list", extraClass = "") {
     const list = document.getElementById(listId);
     if (!list) return;
@@ -258,7 +349,7 @@
     const copy = document.getElementById("online-room-copy");
     const action = document.getElementById("room-action");
     const input = document.getElementById("room-code-input");
-    const hasFirebase = Boolean(window.ZILCH_FIREBASE_CONFIG);
+    const hasFirebase = hasFirebaseConfig();
 
     panel.classList.remove("hidden");
     panel.dataset.mode = mode;
@@ -268,16 +359,106 @@
     input.value = "";
     copy.textContent = hasFirebase
       ? "Add everyone playing from this device before connecting to the room."
-      : "Online sync still needs Firebase config. You can already set who is playing from this device.";
+      : "Online sync needs your Firebase config. You can still set who is playing from this device.";
     action.disabled = !hasFirebase;
     const firstDevicePlayer = document.querySelector("#online-player-list .player-name-input");
     if (mode === "join" && hasFirebase) input.focus();
     else if (firstDevicePlayer) firstDevicePlayer.focus();
   }
 
-  function handleRoomAction() {
+  function showRoomError(message) {
+    const copy = document.getElementById("online-room-copy");
+    copy.textContent = message;
+  }
+
+  async function createUniqueRoomCode() {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const code = generateRoomCode();
+      const snapshot = await state.online.firebase.get(roomRef(code));
+      if (!snapshot.exists()) return code;
+    }
+    throw new Error("Could not find an open room code. Try again.");
+  }
+
+  async function enterOnlineRoom(roomCode, isHost, devicePlayers) {
+    if (state.online.unsubscribe) state.online.unsubscribe();
+    state.online.roomCode = roomCode;
+    state.online.deviceId = state.online.deviceId || generateDeviceId();
+    state.online.isHost = isHost;
+    state.online.devicePlayers = parsePlayers(devicePlayers);
+    setRoomContext("online", state.online.devicePlayers);
+
+    state.online.unsubscribe = state.online.firebase.onValue(roomRef(roomCode), (snapshot) => {
+      const roomData = snapshot.val();
+      state.online.roomData = roomData;
+      if (!roomData) {
+        showRoomError("That room is gone. Create a new one or check the code.");
+        return;
+      }
+
+      state.online.isHost = roomData.hostDeviceId === state.online.deviceId;
+      if (roomData.status === "playing" || roomData.status === "finished") {
+        renderRoomSnapshot({
+          ...(roomData.game || {}),
+          room: { devicePlayers: state.online.devicePlayers }
+        });
+        return;
+      }
+
+      renderRoomLobby(roomData);
+    });
+  }
+
+  async function createOnlineRoom(devicePlayers) {
+    await loadFirebase();
+    const roomCode = await createUniqueRoomCode();
+    const deviceId = generateDeviceId();
+    state.online.deviceId = deviceId;
+    const now = Date.now();
+
+    await state.online.firebase.set(roomRef(roomCode), {
+      status: "lobby",
+      createdAt: now,
+      updatedAt: now,
+      hostDeviceId: deviceId,
+      devices: {
+        [deviceId]: {
+          players: parsePlayers(devicePlayers),
+          joinedAt: now,
+          updatedAt: now
+        }
+      }
+    });
+    await enterOnlineRoom(roomCode, true, devicePlayers);
+  }
+
+  async function joinOnlineRoom(roomCode, devicePlayers) {
+    await loadFirebase();
+    const cleanCode = roomCode.trim().toUpperCase();
+    const snapshot = await state.online.firebase.get(roomRef(cleanCode));
+    if (!snapshot.exists()) {
+      throw new Error("No room found with that code.");
+    }
+    if (snapshot.val().status !== "lobby") {
+      throw new Error("That game already started.");
+    }
+
+    const deviceId = generateDeviceId();
+    const now = Date.now();
+    state.online.deviceId = deviceId;
+    await state.online.firebase.update(roomDeviceRef(cleanCode, deviceId), {
+      players: parsePlayers(devicePlayers),
+      joinedAt: now,
+      updatedAt: now
+    });
+    await state.online.firebase.update(roomRef(cleanCode), { updatedAt: now });
+    await enterOnlineRoom(cleanCode, snapshot.val().hostDeviceId === deviceId, devicePlayers);
+  }
+
+  async function handleRoomAction() {
     const panel = document.getElementById("online-room-panel");
     const input = document.getElementById("room-code-input");
+    const action = document.getElementById("room-action");
     const mode = panel.dataset.mode || "create";
     const roomCode = input.value.trim().toUpperCase();
     const devicePlayers = getOnlineDevicePlayerNames();
@@ -287,11 +468,18 @@
       return;
     }
 
-    window.ZILCH_PENDING_ROOM = {
-      mode,
-      roomCode,
-      devicePlayers
-    };
+    action.disabled = true;
+    action.textContent = mode === "create" ? "Creating..." : "Joining...";
+    showRoomError("Connecting to Firebase...");
+
+    try {
+      if (mode === "create") await createOnlineRoom(devicePlayers);
+      else await joinOnlineRoom(roomCode, devicePlayers);
+    } catch (error) {
+      showRoomError(error.message || "Could not connect to the room.");
+      action.disabled = !hasFirebaseConfig();
+      action.textContent = mode === "create" ? "Create room" : "Join room";
+    }
   }
 
   function rollForFirst(names) {
@@ -550,10 +738,142 @@
     };
 
     clearAutoChoiceTimer();
-    document.getElementById("mode-screen").classList.add("hidden");
-    document.getElementById("setup-screen").classList.add("hidden");
-    document.getElementById("game-screen").classList.remove("hidden");
+    showOnlyScreen("game-screen");
+    state.online.isApplyingRemote = true;
     render();
+    state.online.isApplyingRemote = false;
+  }
+
+  function showOnlyScreen(screenId) {
+    ["mode-screen", "setup-screen", "room-screen", "game-screen"].forEach((id) => {
+      document.getElementById(id).classList.toggle("hidden", id !== screenId);
+    });
+  }
+
+  function renderRoomLobby(roomData) {
+    const players = roomPlayerNames(roomData);
+    const playerList = document.getElementById("room-player-list");
+    const note = document.getElementById("room-lobby-note");
+    const startButtons = Array.from(document.querySelectorAll("[data-room-order]"));
+
+    showOnlyScreen("room-screen");
+    document.getElementById("room-code-display").textContent = state.online.roomCode || "-----";
+    playerList.innerHTML = "";
+
+    players.forEach((name) => {
+      const chip = document.createElement("div");
+      chip.className = "room-player-chip";
+      chip.textContent = name;
+      if (state.online.devicePlayers.includes(name)) {
+        chip.classList.add("local");
+        const local = document.createElement("small");
+        local.textContent = "This device";
+        chip.appendChild(local);
+      }
+      playerList.appendChild(chip);
+    });
+
+    if (!players.length) {
+      const empty = document.createElement("div");
+      empty.className = "room-player-chip";
+      empty.textContent = "No players yet";
+      playerList.appendChild(empty);
+    }
+
+    note.textContent = state.online.isHost
+      ? "You are hosting. Start when everyone is listed."
+      : "Waiting for the host to start the game.";
+    startButtons.forEach((button) => {
+      button.disabled = !state.online.isHost || players.length < 1;
+    });
+  }
+
+  function createInitialGameSnapshot(orderedNames, orderDetail) {
+    const players = orderedNames.map((name) => ({ name, score: 0 }));
+    const first = players[0];
+    return {
+      players,
+      currentIndex: 0,
+      finalRound: false,
+      playedFinalTurns: Object.fromEntries(players.map((player) => [player.name, false])),
+      inheritedScore: 0,
+      inheritedFreeDice: 10,
+      previousTurnPlayer: "",
+      gameOver: false,
+      log: [`${first.name} starts fresh.`, orderDetail],
+      turn: {
+        playerName: first.name,
+        inheritedScore: 0,
+        lockedPoints: 0,
+        looseScore: 0,
+        freeDice: 10,
+        dice: [],
+        options: [],
+        selectedOptionIndex: null,
+        phase: "await-roll",
+        rollId: 0
+      }
+    };
+  }
+
+  async function startOnlineGame(orderMode) {
+    if (!state.online.isHost || !state.online.roomData) return;
+    const players = roomPlayerNames(state.online.roomData);
+    const plan = getOrderPlan(players, orderMode);
+    const game = createInitialGameSnapshot(plan.orderedNames, plan.orderDetail);
+    await state.online.firebase.update(roomRef(), {
+      status: "playing",
+      updatedAt: Date.now(),
+      game
+    });
+  }
+
+  function currentGameSnapshot() {
+    return {
+      players: state.players.map((player) => ({ name: player.name, score: player.score })),
+      currentIndex: state.currentIndex,
+      finalRound: state.finalRound,
+      playedFinalTurns: { ...state.playedFinalTurns },
+      inheritedScore: state.inheritedScore,
+      inheritedFreeDice: state.inheritedFreeDice,
+      previousTurnPlayer: state.previousTurnPlayer,
+      gameOver: state.gameOver,
+      log: state.log.slice(0, 10),
+      turn: state.turn
+        ? {
+            playerName: state.turn.playerName,
+            inheritedScore: state.turn.inheritedScore,
+            lockedPoints: state.turn.lockedPoints,
+            looseScore: state.turn.looseScore,
+            freeDice: state.turn.freeDice,
+            dice: state.turn.dice.slice(),
+            options: cloneCombos(state.turn.options || []),
+            selectedOptionIndex: state.turn.selectedOptionIndex,
+            phase: state.turn.phase,
+            rollId: state.turn.rollId || 0
+          }
+        : null
+    };
+  }
+
+  function syncOnlineGameState() {
+    if (!isRoomMode() || !state.online.roomCode || state.online.isApplyingRemote) return;
+    if (!state.online.firebase || !state.online.db || !state.turn) return;
+    state.online.firebase
+      .update(roomRef(), {
+        status: state.gameOver ? "finished" : "playing",
+        updatedAt: Date.now(),
+        game: currentGameSnapshot()
+      })
+      .catch((error) => {
+        addLog(`Room sync failed: ${error.message || error}`);
+        renderLog();
+      });
+  }
+
+  function renderAndSync() {
+    renderAndSync();
+    syncOnlineGameState();
   }
 
   async function startGame(names, orderMode) {
@@ -580,7 +900,7 @@
     if (state.turn.phase === "await-roll") {
       addLog(`${player.name} starts fresh.`);
     }
-    render();
+    renderAndSync();
   }
 
   function acceptInheritedTurn(build) {
@@ -598,7 +918,7 @@
       addLog(`${turn.playerName} rolls all 10.`);
     }
     turn.phase = "await-roll";
-    render();
+    renderAndSync();
   }
 
   function rollForTurn() {
@@ -615,13 +935,13 @@
     if (turn.options.length === 0) {
       turn.phase = "zilch";
       addLog(`${turn.playerName} rolled ${turn.dice.join(", ")} and zilched.`);
-      render();
+      renderAndSync();
       return;
     }
 
     turn.phase = "choose-option";
     addLog(`${turn.playerName} rolled ${turn.dice.join(", ")}.`);
-    render();
+    renderAndSync();
   }
 
   function selectOption(index) {
@@ -649,7 +969,7 @@
       turn.phase = "choose-next";
       addLog(`${turn.playerName} scores ${formatScore(option.points)} with ${turn.freeDice} free dice.`);
     }
-    render();
+    renderAndSync();
   }
 
   function finishTurn(zilched) {
@@ -765,7 +1085,7 @@
       selectedOptionIndex: null,
       phase: "game-over"
     };
-    render();
+    renderAndSync();
   }
 
   function createDie(value, small = false) {
@@ -1060,6 +1380,28 @@
       .getElementById("add-online-player")
       .addEventListener("click", () => addPlayerInput("", "online-player-list", "online-player-name-input"));
     document.getElementById("room-action").addEventListener("click", handleRoomAction);
+    document.getElementById("copy-room-code").addEventListener("click", async () => {
+      const code = state.online.roomCode;
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code);
+        document.getElementById("room-lobby-note").textContent = "Room code copied.";
+      } catch (error) {
+        document.getElementById("room-lobby-note").textContent = `Room code: ${code}`;
+      }
+    });
+    document.querySelectorAll("[data-room-order]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        document.getElementById("room-lobby-note").textContent = "Starting the game...";
+        try {
+          await startOnlineGame(button.dataset.roomOrder || "roll");
+        } catch (error) {
+          document.getElementById("room-lobby-note").textContent = error.message || "Could not start the game.";
+          renderRoomLobby(state.online.roomData);
+        }
+      });
+    });
     document.getElementById("fresh-turn").addEventListener("click", () => acceptInheritedTurn(false));
     document.getElementById("build-turn").addEventListener("click", () => acceptInheritedTurn(true));
     document.getElementById("roll-dice").addEventListener("click", rollForTurn);
