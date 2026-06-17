@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Zilch</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d89b2b'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23191816'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23191816'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23191816'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="styles.css?v=20260617-player-cells">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section id="setup-screen" class="setup-band" aria-labelledby="setup-title">
+        <div class="setup-copy">
+          <p class="eyebrow">10 dice to 20,000</p>
+          <h1 id="setup-title">Zilch</h1>
+          <p class="setup-line">Score, bank, lock, or lose the loose points.</p>
+        </div>
+
+        <form id="setup-form" class="setup-form">
+          <div class="setup-label-row">
+            <label for="player-1">Players</label>
+            <button id="add-player" type="button">Add player</button>
+          </div>
+          <div id="player-list" class="player-list">
+            <input id="player-1" class="player-name-input" type="text" value="Kent" autocomplete="off" spellcheck="false">
+            <input class="player-name-input" type="text" value="Sonja" autocomplete="off" spellcheck="false">
+          </div>
+
+          <div class="setup-actions" role="group" aria-label="Start options">
+            <button class="primary-action" type="submit" data-order="roll">Roll first</button>
+            <button type="submit" data-order="shuffle">Shuffle</button>
+            <button type="submit" data-order="keep">Keep order</button>
+          </div>
+
+          <div id="setup-animation" class="setup-animation hidden" aria-live="polite">
+            <strong id="setup-animation-title">Setting order</strong>
+            <div id="setup-animation-stage" class="setup-animation-stage"></div>
+          </div>
+        </form>
+      </section>
+
+      <section id="game-screen" class="game-screen hidden" aria-live="polite">
+        <header class="game-top">
+          <div>
+            <p id="round-label" class="eyebrow">Round</p>
+            <h1 id="turn-title">Player turn</h1>
+          </div>
+          <div class="target-meter" aria-label="Target score">
+            <span id="target-label">20,000</span>
+            <div class="meter-track"><span id="leader-meter"></span></div>
+          </div>
+        </header>
+
+        <section class="score-strip" id="score-strip" aria-label="Scores"></section>
+
+        <section class="table-band">
+          <div class="felt">
+            <div class="turn-stats" aria-label="Turn totals">
+              <div>
+                <span>Inherited</span>
+                <strong id="stat-inherited">0</strong>
+              </div>
+              <div>
+                <span>Locked</span>
+                <strong id="stat-locked">0</strong>
+              </div>
+              <div>
+                <span>Loose</span>
+                <strong id="stat-loose">0</strong>
+              </div>
+              <div>
+                <span>Free dice</span>
+                <strong id="stat-free-dice">10</strong>
+              </div>
+              <div>
+                <span>Safe total</span>
+                <strong id="stat-safe-total">0</strong>
+              </div>
+              <div>
+                <span>Bank total</span>
+                <strong id="stat-bank-total">0</strong>
+              </div>
+            </div>
+
+            <div id="offer-panel" class="decision-panel hidden">
+              <h2 id="offer-title">Build or start fresh?</h2>
+              <p id="offer-text"></p>
+              <div class="action-row">
+                <button id="fresh-turn">Roll all 10</button>
+                <button id="build-turn" class="primary-action">Build</button>
+              </div>
+            </div>
+
+            <div id="roll-panel" class="roll-panel">
+              <div id="roll-message" class="roll-message hidden"></div>
+              <div id="dice-row" class="dice-row" aria-label="Current roll"></div>
+              <div class="action-row">
+                <button id="roll-dice" class="primary-action">Roll</button>
+                <button id="bank-turn" disabled>Bank</button>
+              </div>
+            </div>
+
+            <div id="options-panel" class="options-panel" aria-label="Scoring options"></div>
+          </div>
+        </section>
+
+        <section class="log-band" aria-label="Game log">
+          <h2>Table</h2>
+          <ol id="game-log"></ol>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js?v=20260617-player-cells"></script>
+  </body>
+</html>
