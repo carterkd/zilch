@@ -42,3 +42,15 @@ npx firebase-tools deploy --only database
 ```
 
 The current `database.rules.json` is for a friendly beta: anyone can read/write room data if they can reach the database. Room codes are for convenience, not privacy.
+
+### Deploys
+
+GitHub is the source of truth. Pushes to `master` update GitHub Pages and run `.github/workflows/firebase-hosting-live.yml` to deploy Firebase Hosting.
+
+The Firebase workflow needs this GitHub repository secret:
+
+```text
+FIREBASE_SERVICE_ACCOUNT_ZILCH_E6EC7
+```
+
+Use Firebase's GitHub integration (`npx firebase-tools init hosting:github`) or add a Firebase service account JSON key manually in GitHub repository settings.
