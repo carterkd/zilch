@@ -14,6 +14,9 @@ class RulesTest(unittest.TestCase):
     def assert_has(self, dice, points, used, free):
         self.assertIn((points, "".join(sorted(used)), free), compact(score_options(tuple(sorted(dice)))))
 
+    def assert_lacks(self, dice, points, used, free):
+        self.assertNotIn((points, "".join(sorted(used)), free), compact(score_options(tuple(sorted(dice)))))
+
     def test_roll_bounds(self):
         import random
 
@@ -31,12 +34,18 @@ class RulesTest(unittest.TestCase):
         self.assert_has([2, 3, 4, 5, 6], 50, "5", 4)
         self.assert_has([1, 2, 3, 4, 5, 6], 1500, "123456", 0)
         self.assert_has([1, 1, 1, 2, 3], 1000, "111", 2)
+        self.assert_has([1, 1, 1, 2, 3], 100, "1", 4)
+        self.assert_has([1, 1, 1, 2, 3], 200, "11", 3)
+        self.assert_lacks([1, 1, 1, 2, 3], 300, "111", 2)
         self.assert_has([1, 1, 1, 1], 1100, "1111", 0)
         self.assert_has([1, 1, 1, 1, 1], 2000, "11111", 0)
         self.assert_has([2, 2, 2, 4, 6], 200, "222", 2)
         self.assert_has([2, 2, 2, 2], 1000, "2222", 0)
         self.assert_has([5, 5, 5, 5], 1000, "5555", 0)
         self.assert_has([5, 5, 5, 1], 600, "1555", 0)
+        self.assert_has([5, 5, 5, 2, 3], 50, "5", 4)
+        self.assert_has([5, 5, 5, 2, 3], 100, "55", 3)
+        self.assert_lacks([5, 5, 5, 2, 3], 150, "555", 2)
         self.assert_has([1, 5, 5, 5, 6, 1, 5, 2, 1, 6], 2000, "1115555", 3)
         self.assert_has([1, 2, 3, 4, 5, 6, 1, 5], 1650, "11234565", 0)
 

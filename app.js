@@ -159,6 +159,15 @@
     ]);
   }
 
+  function usesThreeSinglesAsTriple(combo, num) {
+    const singleDescription = num === 1 ? "1 (100)" : "5 (50)";
+    return combo.descriptions.filter((description) => description === singleDescription).length >= 3;
+  }
+
+  function isValidScoringCombo(combo) {
+    return !usesThreeSinglesAsTriple(combo, 1) && !usesThreeSinglesAsTriple(combo, 5);
+  }
+
   function cloneCombos(combos) {
     return listValues(combos).map((combo) => ({
       points: Number(combo.points || 0),
@@ -262,6 +271,7 @@
     const unique = [];
     const seen = new Set();
     combinations.forEach((combo) => {
+      if (!isValidScoringCombo(combo)) return;
       const key = comboKey(combo);
       if (!seen.has(key)) {
         seen.add(key);

@@ -62,6 +62,15 @@ def _move_key(move: ScoreOption) -> tuple[int, tuple[int, ...], tuple[int, ...],
     )
 
 
+def _uses_three_singles_as_triple(move: ScoreOption, face: int) -> bool:
+    single_description = "1 (100)" if face == 1 else "5 (50)"
+    return sum(1 for description in move.descriptions if description == single_description) >= 3
+
+
+def _is_valid_combo(move: ScoreOption) -> bool:
+    return not _uses_three_singles_as_triple(move, 1) and not _uses_three_singles_as_triple(move, 5)
+
+
 def scoring_moves(dice: tuple[int, ...]) -> tuple[ScoreOption, ...]:
     moves: list[ScoreOption] = []
     counts = counts_for(dice)
@@ -157,6 +166,8 @@ def score_options(dice: tuple[int, ...]) -> tuple[ScoreOption, ...]:
 
     unique: dict[tuple[int, tuple[int, ...], tuple[int, ...], tuple[str, ...]], ScoreOption] = {}
     for combo in combinations:
+        if not _is_valid_combo(combo):
+            continue
         unique.setdefault(_move_key(combo), combo)
 
     return tuple(sorted(unique.values(), key=lambda option: option.points, reverse=True))
