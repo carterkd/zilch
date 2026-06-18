@@ -2,9 +2,24 @@
   "hosting": {
     "public": ".",
     "ignore": [
-      "firebase.json",
+      ".firebaserc",
+      ".firebase",
+      ".firebase/**",
+      ".git",
+      ".git/**",
+      ".gitignore",
+      "LICENSE.txt",
+      "README.md",
       "database.rules.json",
+      "firebase.json",
       "firebase-config.example.js",
+      "rules.txt",
+      "rules2.txt",
+      "run_zilch_chrome.sh",
+      "scoring.test.js",
+      "tricky_dice.txt",
+      "*.py",
+      "__pycache__/**",
       "**/.*",
       "**/node_modules/**"
     ]
