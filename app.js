@@ -562,8 +562,43 @@
     input.autocomplete = "off";
     input.spellcheck = false;
     input.setAttribute("aria-label", `Player ${list.children.length + 1}`);
+    markDefaultNameInput(input, value);
     list.appendChild(input);
     input.focus();
+  }
+
+  function markDefaultNameInput(input, value = input.value) {
+    const defaultValue = String(value || "").trim();
+    if (defaultValue) {
+      input.dataset.defaultName = defaultValue;
+      input.dataset.userEdited = "false";
+    } else {
+      delete input.dataset.defaultName;
+      input.dataset.userEdited = "false";
+    }
+  }
+
+  function installNameInputBehavior(root = document) {
+    root.querySelectorAll(".player-name-input").forEach((input) => {
+      if (input.dataset.nameBehaviorReady === "true") return;
+      input.dataset.nameBehaviorReady = "true";
+      if (input.value.trim() && !input.dataset.defaultName) markDefaultNameInput(input);
+
+      input.addEventListener("pointerdown", () => {
+        if (
+          input.dataset.defaultName &&
+          input.dataset.userEdited !== "true" &&
+          input.value === input.dataset.defaultName
+        ) {
+          input.value = "";
+          input.dataset.userEdited = "true";
+        }
+      });
+
+      input.addEventListener("input", () => {
+        input.dataset.userEdited = "true";
+      });
+    });
   }
 
   function nextAiName(listId = "player-list") {
@@ -596,6 +631,7 @@
     input.autocomplete = "off";
     input.spellcheck = false;
     input.setAttribute("aria-label", `${isAi ? "AI" : "Player"} ${list.children.length + 1}`);
+    markDefaultNameInput(input, value);
 
     const kind = document.createElement("span");
     kind.className = "player-kind";
@@ -603,6 +639,7 @@
 
     entry.append(input, kind);
     list.appendChild(entry);
+    installNameInputBehavior(entry);
     input.focus();
     input.select();
   }
@@ -625,7 +662,10 @@
         entry.classList.remove("ai");
         const kind = entry.querySelector(".player-kind");
         if (kind) kind.textContent = "Human";
-        if (input) input.value = ONLINE_DEFAULT_PLAYERS[index];
+        if (input) {
+          input.value = ONLINE_DEFAULT_PLAYERS[index];
+          markDefaultNameInput(input, ONLINE_DEFAULT_PLAYERS[index]);
+        }
         return;
       }
       entry.remove();
@@ -1883,7 +1923,22 @@
     const panel = document.getElementById("options-panel");
     const highScore = Math.max(...state.players.map((player) => player.score));
     const winners = state.players.filter((player) => player.score === highScore).map((player) => player.name);
-    panel.innerHTML = `<div class="winner-panel"><h2>${winners.join(" and ")} wins</h2><p>${formatScore(highScore)} points</p></div>`;
+    panel.innerHTML = "";
+    const winnerPanel = document.createElement("div");
+    winnerPanel.className = "winner-panel";
+    const title = document.createElement("h2");
+    title.textContent = `${winners.join(" and ")} wins`;
+    const score = document.createElement("p");
+    score.textContent = `${formatScore(highScore)} points`;
+    const playAgain = document.createElement("button");
+    playAgain.type = "button";
+    playAgain.className = "primary-action";
+    playAgain.textContent = "Play again";
+    playAgain.addEventListener("click", () => {
+      window.location.reload();
+    });
+    winnerPanel.append(title, score, playAgain);
+    panel.appendChild(winnerPanel);
   }
 
   function render() {
@@ -1978,6 +2033,7 @@
   }
 
   if (typeof document !== "undefined") {
+    installNameInputBehavior();
     bindEvents();
     window.ZILCH_RENDER_ROOM_SNAPSHOT = renderRoomSnapshot;
   }
