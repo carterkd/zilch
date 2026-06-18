@@ -5,6 +5,7 @@ on:
     branches:
       - master
     paths:
+      - ".github/workflows/firebase-hosting-live.yml"
       - ".firebaserc"
       - "app.js"
       - "firebase-config.js"
