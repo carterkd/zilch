@@ -10,6 +10,7 @@
   };
   const scoreCache = new Map();
   const AUTO_ACTION_MS = 10000;
+  const TABLE_LOG_LIMIT = 50;
   const FIREBASE_SDK_VERSION = "12.15.0";
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const ONLINE_DEFAULT_PLAYERS = ["Sonja", ""];
@@ -1009,9 +1010,8 @@
   }
 
   function addLog(message) {
-    if (state.log[0] === message) return;
     state.log.unshift(message);
-    state.log = state.log.slice(0, 18);
+    state.log = state.log.slice(0, TABLE_LOG_LIMIT);
   }
 
   function currentPlayer() {
@@ -1126,7 +1126,7 @@
     state.inheritedFreeDice = Number(next.inheritedFreeDice || 10);
     state.previousTurnPlayer = String(next.previousTurnPlayer || "");
     state.gameOver = Boolean(next.gameOver);
-    state.log = listValues(next.log).map(String).slice(0, 18);
+    state.log = listValues(next.log).map(String).slice(0, TABLE_LOG_LIMIT);
     setRoomContext("online", next.room && next.room.devicePlayers ? next.room.devicePlayers : []);
     state.turn = {
       playerName: turn.playerName || players[state.currentIndex].name,
@@ -1267,7 +1267,7 @@
       inheritedFreeDice: state.inheritedFreeDice,
       previousTurnPlayer: state.previousTurnPlayer,
       gameOver: state.gameOver,
-      log: state.log.slice(0, 18),
+      log: state.log.slice(0, TABLE_LOG_LIMIT),
       turn: state.turn
         ? {
             playerName: state.turn.playerName,
