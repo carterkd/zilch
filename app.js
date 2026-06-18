@@ -94,11 +94,11 @@
   }
 
   function cloneCombos(combos) {
-    return combos.map((combo) => ({
-      points: combo.points,
-      descriptions: combo.descriptions.slice(),
-      usedDice: combo.usedDice.slice(),
-      remainingDice: combo.remainingDice.slice()
+    return listValues(combos).map((combo) => ({
+      points: Number(combo.points || 0),
+      descriptions: listValues(combo.descriptions).map(String),
+      usedDice: listValues(combo.usedDice).map(Number),
+      remainingDice: listValues(combo.remainingDice).map(Number)
     }));
   }
 
@@ -224,7 +224,7 @@
     return scoringCombinations.concat(shifted).sort((a, b) => b.points - a.points);
   }
 
-  function parsePlayers(rawNames) {
+  function parsePlayers(rawNames, fallback = ["Kent", "Sonja"]) {
     const unique = [];
     const names = Array.isArray(rawNames) ? rawNames : String(rawNames).split(/\n|,/);
     names
@@ -233,7 +233,7 @@
       .forEach((name) => {
         if (!unique.includes(name)) unique.push(name);
       });
-    return unique.length ? unique : ["Kent", "Sonja"];
+    return unique.length ? unique : fallback.slice();
   }
 
   function hasFirebaseConfig() {
@@ -294,7 +294,9 @@
   }
 
   function roomPlayerNames(roomData) {
-    const devices = roomData && roomData.devices ? listValues(roomData.devices) : [];
+    const devices = roomData && roomData.devices
+      ? listValues(roomData.devices).sort((a, b) => Number(a.joinedAt || 0) - Number(b.joinedAt || 0))
+      : [];
     const unique = [];
     devices
       .flatMap((device) => listValues(device.players))
@@ -333,7 +335,7 @@
   }
 
   function getOnlineDevicePlayerNames() {
-    return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value));
+    return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value), []);
   }
 
   function showSetupScreen() {
@@ -385,7 +387,7 @@
     state.online.roomCode = roomCode;
     state.online.deviceId = state.online.deviceId || generateDeviceId();
     state.online.isHost = isHost;
-    state.online.devicePlayers = parsePlayers(devicePlayers);
+    state.online.devicePlayers = parsePlayers(devicePlayers, []);
     setRoomContext("online", state.online.devicePlayers);
 
     state.online.unsubscribe = state.online.firebase.onValue(roomRef(roomCode), (snapshot) => {
@@ -423,7 +425,7 @@
       hostDeviceId: deviceId,
       devices: {
         [deviceId]: {
-          players: parsePlayers(devicePlayers),
+          players: parsePlayers(devicePlayers, []),
           joinedAt: now,
           updatedAt: now
         }
@@ -447,7 +449,7 @@
     const now = Date.now();
     state.online.deviceId = deviceId;
     await state.online.firebase.update(roomDeviceRef(cleanCode, deviceId), {
-      players: parsePlayers(devicePlayers),
+      players: parsePlayers(devicePlayers, []),
       joinedAt: now,
       updatedAt: now
     });
@@ -462,6 +464,13 @@
     const mode = panel.dataset.mode || "create";
     const roomCode = input.value.trim().toUpperCase();
     const devicePlayers = getOnlineDevicePlayerNames();
+
+    if (!devicePlayers.length) {
+      showRoomError("Add at least one player on this device.");
+      const firstDevicePlayer = document.querySelector("#online-player-list .player-name-input");
+      if (firstDevicePlayer) firstDevicePlayer.focus();
+      return;
+    }
 
     if (mode === "join" && !roomCode) {
       input.focus();
@@ -657,7 +666,7 @@
   function setRoomContext(mode, devicePlayers) {
     state.room = {
       mode,
-      devicePlayers: mode === "online" ? parsePlayers(devicePlayers) : []
+      devicePlayers: mode === "online" ? parsePlayers(devicePlayers, []) : []
     };
   }
 
@@ -686,11 +695,12 @@
   }
 
   function normalizeSnapshotPlayers(players) {
-    if (!Array.isArray(players) || !players.length) {
+    const rawPlayers = listValues(players);
+    if (!rawPlayers.length) {
       return parsePlayers([]).map((name) => ({ name, score: 0 }));
     }
 
-    return players
+    return rawPlayers
       .map((player) => {
         if (typeof player === "string") return { name: player.trim(), score: 0 };
         return {
@@ -706,7 +716,7 @@
     const players = normalizeSnapshotPlayers(next.players);
     const currentIndex = Number.isInteger(next.currentIndex) ? next.currentIndex : 0;
     const turn = next.turn || {};
-    const dice = Array.isArray(turn.dice) ? turn.dice.slice() : [];
+    const dice = listValues(turn.dice).map(Number);
     const phase = turn.phase || "await-roll";
     const options = Array.isArray(turn.options)
       ? cloneCombos(turn.options)
@@ -722,7 +732,7 @@
     state.inheritedFreeDice = Number(next.inheritedFreeDice || 10);
     state.previousTurnPlayer = String(next.previousTurnPlayer || "");
     state.gameOver = Boolean(next.gameOver);
-    state.log = Array.isArray(next.log) ? next.log.slice(0, 10) : [];
+    state.log = listValues(next.log).map(String).slice(0, 10);
     setRoomContext("online", next.room && next.room.devicePlayers ? next.room.devicePlayers : []);
     state.turn = {
       playerName: turn.playerName || players[state.currentIndex].name,
@@ -872,7 +882,7 @@
   }
 
   function renderAndSync() {
-    renderAndSync();
+    render();
     syncOnlineGameState();
   }
 
