@@ -12,6 +12,7 @@
   const AUTO_ACTION_MS = 10000;
   const FIREBASE_SDK_VERSION = "12.15.0";
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const ONLINE_DEFAULT_PLAYERS = ["Sonja", ""];
 
   const state = {
     players: [],
@@ -330,6 +331,14 @@
     input.focus();
   }
 
+  function resetOnlineDevicePlayerInputs() {
+    const inputs = Array.from(document.querySelectorAll("#online-player-list .player-name-input"));
+    ONLINE_DEFAULT_PLAYERS.forEach((value, index) => {
+      if (inputs[index]) inputs[index].value = value;
+    });
+    inputs.slice(ONLINE_DEFAULT_PLAYERS.length).forEach((input) => input.remove());
+  }
+
   function getSetupPlayerNames() {
     return parsePlayers(Array.from(document.querySelectorAll("#player-list .player-name-input")).map((input) => input.value));
   }
@@ -353,6 +362,7 @@
     const input = document.getElementById("room-code-input");
     const hasFirebase = hasFirebaseConfig();
 
+    resetOnlineDevicePlayerInputs();
     panel.classList.remove("hidden");
     panel.dataset.mode = mode;
     title.textContent = mode === "create" ? "Create online room" : "Join online room";
