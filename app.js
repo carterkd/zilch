@@ -13,6 +13,69 @@
   const FIREBASE_SDK_VERSION = "12.15.0";
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const ONLINE_DEFAULT_PLAYERS = ["Sonja", ""];
+  const AI_DEFAULT_NAMES = [
+    "DiceGPT",
+    "Zilchbot 9000",
+    "HAL 10K",
+    "Bank-O-Tron",
+    "Risk-E Business",
+    "Roll Model T",
+    "Bytey McRollface",
+    "Circuit Breaker",
+    "Probability Pete",
+    "Lady Luck.exe",
+    "The Bankinator",
+    "Captain Combo",
+    "Free Dice Fred",
+    "Professor Pips",
+    "Odds Engine",
+    "Stack Overflow",
+    "Botimus Prime",
+    "Roll Matrix",
+    "Count Zero",
+    "The Zilch Whisperer",
+    "Algorithm Al",
+    "Data McBankface",
+    "Risk Calculator",
+    "Dice Dynamo",
+    "Bank Holiday",
+    "Pip Squeak",
+    "Neural Nettie",
+    "Expected Val",
+    "Robo Roller",
+    "The Hot Dice Kid",
+    "Combo Wombo",
+    "Sir Rolls-a-Lot",
+    "Ada Lovelace Dice",
+    "Greedy Gus",
+    "Deep Blue Dice",
+    "Monte Carlo",
+    "The Re-Roller",
+    "Loose Points Larry",
+    "Fifty Point Frank",
+    "Tin Can Tanner",
+    "Bank Shot Betty",
+    "Roll Bot Ross"
+  ];
+  const AI_NAME_CODE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const AI_DELAY_MS = {
+    offer: 1200,
+    roll: 950,
+    optionThink: 1200,
+    optionTake: 1350,
+    next: 1250,
+    zilch: 1400
+  };
+  const EV_STEP = 50;
+  const EV_MAX_LOOSE = 8000;
+  const EV_HORIZON = 5;
+  const evRollCache = new Map();
+  const evOutcomeCache = new Map();
+  const factorials = Array.from({ length: 11 }, (_, index) => {
+    let total = 1;
+    for (let i = 2; i <= index; i += 1) total *= i;
+    return total;
+  });
 
   const state = {
     players: [],
@@ -26,6 +89,7 @@
     gameOver: false,
     log: [],
     autoChoice: null,
+    aiAction: null,
     room: {
       mode: "local",
       devicePlayers: []
@@ -225,6 +289,138 @@
     return scoringCombinations.concat(shifted).sort((a, b) => b.points - a.points);
   }
 
+  function snapEvValue(value) {
+    return Math.round(value / EV_STEP) * EV_STEP;
+  }
+
+  function diceFromCounts(counts) {
+    const dice = [];
+    counts.forEach((count, index) => {
+      for (let i = 0; i < count; i += 1) dice.push(index + 1);
+    });
+    return dice;
+  }
+
+  function multinomialOutcomes(numDice) {
+    const outcomes = [];
+    const totalRolls = 6 ** numDice;
+
+    function visit(remaining, slots, prefix) {
+      if (slots === 1) {
+        const counts = prefix.concat(remaining);
+        let ways = factorials[numDice];
+        counts.forEach((count) => {
+          ways /= factorials[count];
+        });
+        outcomes.push({ counts, probability: ways / totalRolls });
+        return;
+      }
+
+      for (let count = 0; count <= remaining; count += 1) {
+        visit(remaining - count, slots - 1, prefix.concat(count));
+      }
+    }
+
+    visit(numDice, 6, []);
+    return outcomes;
+  }
+
+  function evOutcomeSummaries(freeDice) {
+    if (evOutcomeCache.has(freeDice)) return evOutcomeCache.get(freeDice);
+    const summaries = multinomialOutcomes(freeDice).map((outcome) => {
+      const dice = diceFromCounts(outcome.counts);
+      return {
+        probability: outcome.probability,
+        options: scoreOptionsForDice(dice).map((option) => ({
+          points: option.points,
+          freeDice: option.remainingDice.length
+        }))
+      };
+    });
+    evOutcomeCache.set(freeDice, summaries);
+    return summaries;
+  }
+
+  function evRollValue(looseScore, freeDice, depth = EV_HORIZON) {
+    const diceCount = freeDice > 0 ? freeDice : 10;
+    if (looseScore > EV_MAX_LOOSE) return looseScore;
+    const snappedLoose = snapEvValue(looseScore);
+    const key = `${snappedLoose}:${diceCount}:${depth}`;
+    if (evRollCache.has(key)) return evRollCache.get(key);
+    if (depth <= 0) return snappedLoose;
+
+    let total = 0;
+    evOutcomeSummaries(diceCount).forEach((outcome) => {
+      if (!outcome.options.length) return;
+      let best = 0;
+      outcome.options.forEach((option) => {
+        const nextLoose = snappedLoose + option.points;
+        let value;
+        if (option.freeDice === 0) {
+          value = nextLoose + evRollValue(0, 10, depth - 1);
+        } else if (nextLoose > EV_MAX_LOOSE) {
+          value = nextLoose;
+        } else {
+          value = Math.max(nextLoose, evRollValue(nextLoose, option.freeDice, depth - 1));
+        }
+        best = Math.max(best, value);
+      });
+      total += outcome.probability * best;
+    });
+
+    evRollCache.set(key, total);
+    return total;
+  }
+
+  function evChooseAfterScore(looseScore, freeDice) {
+    if (freeDice <= 0) {
+      return {
+        action: "roll",
+        value: looseScore + evRollValue(0, 10),
+        bankValue: looseScore,
+        rollValue: looseScore + evRollValue(0, 10)
+      };
+    }
+
+    const rollValue = evRollValue(looseScore, freeDice);
+    return {
+      action: looseScore >= rollValue ? "bank" : "roll",
+      value: Math.max(looseScore, rollValue),
+      bankValue: looseScore,
+      rollValue
+    };
+  }
+
+  function evOptionDecision(looseScore, option) {
+    const nextLoose = looseScore + option.points;
+    if (option.remainingDice.length === 0) {
+      return {
+        action: "lock and roll",
+        value: nextLoose + evRollValue(0, 10),
+        bankValue: nextLoose,
+        rollValue: nextLoose + evRollValue(0, 10)
+      };
+    }
+
+    return evChooseAfterScore(nextLoose, option.remainingDice.length);
+  }
+
+  function bestEvOption(turn) {
+    let best = null;
+    (turn.options || []).forEach((option, index) => {
+      const decision = evOptionDecision(turn.looseScore, option);
+      const candidate = { index, option, decision };
+      if (
+        !best ||
+        decision.value > best.decision.value ||
+        (decision.value === best.decision.value && option.points > best.option.points)
+      ) {
+        best = candidate;
+      }
+    });
+    return best;
+  }
+
   function parsePlayers(rawNames, fallback = ["Kent", "Sonja"]) {
     const unique = [];
     const names = Array.isArray(rawNames) ? rawNames : String(rawNames).split(/\n|,/);
@@ -235,6 +431,39 @@
         if (!unique.includes(name)) unique.push(name);
       });
     return unique.length ? unique : fallback.slice();
+  }
+
+  function normalizePlayerEntry(player, fallbackAi = false) {
+    if (typeof player === "string") {
+      return { name: player.trim(), score: 0, isAi: fallbackAi };
+    }
+
+    return {
+      name: String(player && player.name ? player.name : "").trim(),
+      score: Number(player && player.score ? player.score : 0),
+      isAi: Boolean(player && player.isAi)
+    };
+  }
+
+  function parsePlayerEntries(rawPlayers, fallback = [
+    { name: "Kent", isAi: false },
+    { name: "Sonja", isAi: false }
+  ]) {
+    const unique = [];
+    listValues(rawPlayers).forEach((rawPlayer) => {
+      const player = normalizePlayerEntry(rawPlayer);
+      if (!player.name || unique.some((item) => item.name === player.name)) return;
+      unique.push({ name: player.name, isAi: player.isAi });
+    });
+    return unique.length ? unique : fallback.map((player) => ({ ...player }));
+  }
+
+  function playerName(player) {
+    return typeof player === "string" ? player : player.name;
+  }
+
+  function orderItems(items, orderedNames) {
+    return orderedNames.map((name) => items.find((item) => playerName(item) === name) || name);
   }
 
   function hasFirebaseConfig() {
@@ -294,19 +523,25 @@
     return [];
   }
 
-  function roomPlayerNames(roomData) {
+  function playerNames(players) {
+    return parsePlayerEntries(players, []).map((player) => player.name);
+  }
+
+  function roomPlayers(roomData) {
     const devices = roomData && roomData.devices
       ? listValues(roomData.devices).sort((a, b) => Number(a.joinedAt || 0) - Number(b.joinedAt || 0))
       : [];
     const unique = [];
     devices
-      .flatMap((device) => listValues(device.players))
-      .map((name) => String(name).trim())
-      .filter(Boolean)
-      .forEach((name) => {
-        if (!unique.includes(name)) unique.push(name);
+      .flatMap((device) => parsePlayerEntries(listValues(device.players), []))
+      .forEach((player) => {
+        if (!unique.some((item) => item.name === player.name)) unique.push(player);
       });
     return unique;
+  }
+
+  function roomPlayerNames(roomData) {
+    return roomPlayers(roomData).map((player) => player.name);
   }
 
   function roomRef(roomCode = state.online.roomCode) {
@@ -331,20 +566,97 @@
     input.focus();
   }
 
+  function nextAiName(listId = "player-list") {
+    const used = new Set(
+      Array.from(document.querySelectorAll(`#${listId} .player-name-input`))
+        .map((input) => input.value.trim())
+        .filter(Boolean)
+    );
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const base = AI_DEFAULT_NAMES[secureRandomInt(AI_DEFAULT_NAMES.length)];
+      const code = Array.from({ length: 3 }, () => AI_NAME_CODE[secureRandomInt(AI_NAME_CODE.length)]).join("");
+      const name = `${base} ${code}`;
+      if (!used.has(name)) return name;
+    }
+    return `Zilchbot ${Date.now().toString(36).slice(-4).toUpperCase()}`;
+  }
+
+  function addPlayerEntry(value = "", isAi = false, listId = "player-list", extraClass = "") {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    const entry = document.createElement("div");
+    entry.className = `player-entry${isAi ? " ai" : ""}`;
+    entry.dataset.kind = isAi ? "ai" : "human";
+
+    const input = document.createElement("input");
+    input.className = "player-name-input";
+    if (extraClass) input.classList.add(extraClass);
+    input.type = "text";
+    input.value = value;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("aria-label", `${isAi ? "AI" : "Player"} ${list.children.length + 1}`);
+
+    const kind = document.createElement("span");
+    kind.className = "player-kind";
+    kind.textContent = isAi ? "AI" : "Human";
+
+    entry.append(input, kind);
+    list.appendChild(entry);
+    input.focus();
+    input.select();
+  }
+
+  function addLocalPlayerEntry(value = "", isAi = false) {
+    addPlayerEntry(value, isAi, "player-list");
+  }
+
+  function addOnlinePlayerEntry(value = "", isAi = false) {
+    addPlayerEntry(value, isAi, "online-player-list", "online-player-name-input");
+  }
+
   function resetOnlineDevicePlayerInputs() {
-    const inputs = Array.from(document.querySelectorAll("#online-player-list .player-name-input"));
-    ONLINE_DEFAULT_PLAYERS.forEach((value, index) => {
-      if (inputs[index]) inputs[index].value = value;
+    const list = document.getElementById("online-player-list");
+    const entries = Array.from(document.querySelectorAll("#online-player-list .player-entry"));
+    entries.forEach((entry, index) => {
+      const input = entry.querySelector(".player-name-input");
+      if (index < ONLINE_DEFAULT_PLAYERS.length) {
+        entry.dataset.kind = "human";
+        entry.classList.remove("ai");
+        const kind = entry.querySelector(".player-kind");
+        if (kind) kind.textContent = "Human";
+        if (input) input.value = ONLINE_DEFAULT_PLAYERS[index];
+        return;
+      }
+      entry.remove();
     });
-    inputs.slice(ONLINE_DEFAULT_PLAYERS.length).forEach((input) => input.remove());
+    while (list && document.querySelectorAll("#online-player-list .player-entry").length < ONLINE_DEFAULT_PLAYERS.length) {
+      addOnlinePlayerEntry(ONLINE_DEFAULT_PLAYERS[document.querySelectorAll("#online-player-list .player-entry").length], false);
+    }
   }
 
-  function getSetupPlayerNames() {
-    return parsePlayers(Array.from(document.querySelectorAll("#player-list .player-name-input")).map((input) => input.value));
+  function getSetupPlayers() {
+    const entries = Array.from(document.querySelectorAll("#player-list .player-entry")).map((entry) => ({
+      name: entry.querySelector(".player-name-input") ? entry.querySelector(".player-name-input").value : "",
+      isAi: entry.dataset.kind === "ai"
+    }));
+
+    if (entries.length) return parsePlayerEntries(entries);
+
+    return parsePlayers(Array.from(document.querySelectorAll("#player-list .player-name-input")).map((input) => input.value))
+      .map((name) => ({ name, isAi: false }));
   }
 
-  function getOnlineDevicePlayerNames() {
-    return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value), []);
+  function getOnlineDevicePlayers() {
+    const entries = Array.from(document.querySelectorAll("#online-player-list .player-entry")).map((entry) => ({
+      name: entry.querySelector(".player-name-input") ? entry.querySelector(".player-name-input").value : "",
+      isAi: entry.dataset.kind === "ai"
+    }));
+
+    if (entries.length) return parsePlayerEntries(entries, []);
+
+    return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value), [])
+      .map((name) => ({ name, isAi: false }));
   }
 
   function showSetupScreen() {
@@ -394,10 +706,11 @@
 
   async function enterOnlineRoom(roomCode, isHost, devicePlayers) {
     if (state.online.unsubscribe) state.online.unsubscribe();
+    const parsedDevicePlayers = parsePlayerEntries(devicePlayers, []);
     state.online.roomCode = roomCode;
     state.online.deviceId = state.online.deviceId || generateDeviceId();
     state.online.isHost = isHost;
-    state.online.devicePlayers = parsePlayers(devicePlayers, []);
+    state.online.devicePlayers = parsedDevicePlayers.map((player) => player.name);
     setRoomContext("online", state.online.devicePlayers);
 
     state.online.unsubscribe = state.online.firebase.onValue(roomRef(roomCode), (snapshot) => {
@@ -425,6 +738,7 @@
     await loadFirebase();
     const roomCode = await createUniqueRoomCode();
     const deviceId = generateDeviceId();
+    const parsedDevicePlayers = parsePlayerEntries(devicePlayers, []);
     state.online.deviceId = deviceId;
     const now = Date.now();
 
@@ -435,7 +749,7 @@
       hostDeviceId: deviceId,
       devices: {
         [deviceId]: {
-          players: parsePlayers(devicePlayers, []),
+          players: parsedDevicePlayers,
           joinedAt: now,
           updatedAt: now
         }
@@ -446,6 +760,7 @@
 
   async function joinOnlineRoom(roomCode, devicePlayers) {
     await loadFirebase();
+    const parsedDevicePlayers = parsePlayerEntries(devicePlayers, []);
     const cleanCode = roomCode.trim().toUpperCase();
     const snapshot = await state.online.firebase.get(roomRef(cleanCode));
     if (!snapshot.exists()) {
@@ -459,7 +774,7 @@
     const now = Date.now();
     state.online.deviceId = deviceId;
     await state.online.firebase.update(roomDeviceRef(cleanCode, deviceId), {
-      players: parsePlayers(devicePlayers, []),
+      players: parsedDevicePlayers,
       joinedAt: now,
       updatedAt: now
     });
@@ -473,7 +788,7 @@
     const action = document.getElementById("room-action");
     const mode = panel.dataset.mode || "create";
     const roomCode = input.value.trim().toUpperCase();
-    const devicePlayers = getOnlineDevicePlayerNames();
+    const devicePlayers = getOnlineDevicePlayers();
 
     if (!devicePlayers.length) {
       showRoomError("Add at least one player on this device.");
@@ -505,10 +820,11 @@
     return rollForFirstWithHistory(names).result;
   }
 
-  function rollForFirstWithHistory(names) {
-    if (names.length <= 1) {
+  function rollForFirstWithHistory(items) {
+    const names = items.map(playerName);
+    if (items.length <= 1) {
       return {
-        result: { names, detail: "Solo table" },
+        result: { names: items, detail: "Solo table" },
         history: [{ title: "Solo table", rows: names.map((name) => ({ name, note: "first" })) }]
       };
     }
@@ -537,7 +853,7 @@
     const orderedNames = [first].concat(names.slice(firstIndex + 1), names.slice(0, firstIndex));
     return {
       result: {
-        names: orderedNames,
+        names: orderItems(items, orderedNames),
         detail: `${first} rolled into first.`
       },
       history: history.concat({
@@ -547,8 +863,8 @@
     };
   }
 
-  function shuffleNames(names) {
-    const shuffled = names.slice();
+  function shuffleNames(items) {
+    const shuffled = items.slice();
     for (let i = shuffled.length - 1; i > 0; i -= 1) {
       const j = secureRandomInt(i + 1);
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -557,6 +873,7 @@
   }
 
   function getOrderPlan(names, orderMode) {
+    const orderNames = names.map(playerName);
     if (orderMode === "roll") {
       const rolled = rollForFirstWithHistory(names);
       return {
@@ -572,10 +889,10 @@
         orderedNames,
         orderDetail: "Order shuffled.",
         steps: [
-          { title: "Shuffling", rows: names.map((name) => ({ name, note: "in" })) },
+          { title: "Shuffling", rows: orderNames.map((name) => ({ name, note: "in" })) },
           {
             title: "Order set",
-            rows: orderedNames.map((name, index) => ({ name, note: index === 0 ? "first" : `${index + 1}` }))
+            rows: orderedNames.map((item, index) => ({ name: playerName(item), note: index === 0 ? "first" : `${index + 1}` }))
           }
         ]
       };
@@ -587,7 +904,7 @@
       steps: [
         {
           title: "Order kept",
-          rows: names.map((name, index) => ({ name, note: index === 0 ? "first" : `${index + 1}` }))
+          rows: orderNames.map((name, index) => ({ name, note: index === 0 ? "first" : `${index + 1}` }))
         }
       ]
     };
@@ -652,12 +969,21 @@
   }
 
   function addLog(message) {
+    if (state.log[0] === message) return;
     state.log.unshift(message);
-    state.log = state.log.slice(0, 10);
+    state.log = state.log.slice(0, 18);
   }
 
   function currentPlayer() {
     return state.players[state.currentIndex];
+  }
+
+  function isAiPlayer(player) {
+    return Boolean(player && player.isAi);
+  }
+
+  function isCurrentTurnAi() {
+    return isAiPlayer(currentPlayer());
   }
 
   function isRoomMode() {
@@ -673,6 +999,10 @@
     return Boolean(player && isPlayerOnThisDevice(player.name));
   }
 
+  function isCurrentTurnHumanLocal() {
+    return isCurrentTurnLocal() && !isCurrentTurnAi();
+  }
+
   function setRoomContext(mode, devicePlayers) {
     state.room = {
       mode,
@@ -685,7 +1015,10 @@
   }
 
   function startGameFromOrder(orderedNames, orderDetail, roomContext = { mode: "local", devicePlayers: [] }) {
-    state.players = orderedNames.map((name) => ({ name, score: 0 }));
+    state.players = orderedNames.map((player) => {
+      const normalized = normalizePlayerEntry(player);
+      return { name: normalized.name, score: 0, isAi: normalized.isAi };
+    });
     state.currentIndex = 0;
     state.finalRound = false;
     state.playedFinalTurns = Object.fromEntries(state.players.map((player) => [player.name, false]));
@@ -697,6 +1030,7 @@
     state.log = [];
     setRoomContext(roomContext.mode || "local", roomContext.devicePlayers || []);
     clearAutoChoiceTimer();
+    clearAiActionTimer();
     addLog(orderDetail);
 
     document.getElementById("setup-screen").classList.add("hidden");
@@ -707,15 +1041,16 @@
   function normalizeSnapshotPlayers(players) {
     const rawPlayers = listValues(players);
     if (!rawPlayers.length) {
-      return parsePlayers([]).map((name) => ({ name, score: 0 }));
+      return parsePlayers([]).map((name) => ({ name, score: 0, isAi: false }));
     }
 
     return rawPlayers
       .map((player) => {
-        if (typeof player === "string") return { name: player.trim(), score: 0 };
+        if (typeof player === "string") return { name: player.trim(), score: 0, isAi: false };
         return {
           name: String(player.name || "").trim(),
-          score: Number(player.score || 0)
+          score: Number(player.score || 0),
+          isAi: Boolean(player.isAi)
         };
       })
       .filter((player) => player.name);
@@ -728,6 +1063,15 @@
     const turn = next.turn || {};
     const dice = listValues(turn.dice).map(Number);
     const phase = turn.phase || "await-roll";
+    const incomingSelectedOptionIndex = Number.isInteger(turn.selectedOptionIndex) ? turn.selectedOptionIndex : null;
+    const selectedOptionIndex =
+      state.turn &&
+      state.turn.rollId === Number(turn.rollId || 0) &&
+      state.turn.phase === phase &&
+      Number.isInteger(state.turn.selectedOptionIndex) &&
+      incomingSelectedOptionIndex === null
+        ? state.turn.selectedOptionIndex
+        : incomingSelectedOptionIndex;
     const options = Array.isArray(turn.options)
       ? cloneCombos(turn.options)
       : phase === "choose-option"
@@ -742,7 +1086,7 @@
     state.inheritedFreeDice = Number(next.inheritedFreeDice || 10);
     state.previousTurnPlayer = String(next.previousTurnPlayer || "");
     state.gameOver = Boolean(next.gameOver);
-    state.log = listValues(next.log).map(String).slice(0, 10);
+    state.log = listValues(next.log).map(String).slice(0, 18);
     setRoomContext("online", next.room && next.room.devicePlayers ? next.room.devicePlayers : []);
     state.turn = {
       playerName: turn.playerName || players[state.currentIndex].name,
@@ -752,7 +1096,15 @@
       freeDice: Number(turn.freeDice || 10),
       dice,
       options,
-      selectedOptionIndex: Number.isInteger(turn.selectedOptionIndex) ? turn.selectedOptionIndex : null,
+      selectedOptionIndex,
+      aiExplanation:
+        state.turn &&
+        state.turn.rollId === Number(turn.rollId || 0) &&
+        state.turn.phase === phase &&
+        state.turn.aiExplanation &&
+        !turn.aiExplanation
+          ? state.turn.aiExplanation
+          : String(turn.aiExplanation || ""),
       phase,
       rollId: Number(turn.rollId || 0)
     };
@@ -771,7 +1123,7 @@
   }
 
   function renderRoomLobby(roomData) {
-    const players = roomPlayerNames(roomData);
+    const players = roomPlayers(roomData);
     const playerList = document.getElementById("room-player-list");
     const note = document.getElementById("room-lobby-note");
     const startButtons = Array.from(document.querySelectorAll("[data-room-order]"));
@@ -780,11 +1132,19 @@
     document.getElementById("room-code-display").textContent = state.online.roomCode || "-----";
     playerList.innerHTML = "";
 
-    players.forEach((name) => {
+    players.forEach((player) => {
       const chip = document.createElement("div");
       chip.className = "room-player-chip";
-      chip.textContent = name;
-      if (state.online.devicePlayers.includes(name)) {
+      if (player.isAi) chip.classList.add("ai");
+      const label = document.createElement("span");
+      label.textContent = player.name;
+      chip.appendChild(label);
+      if (player.isAi) {
+        const ai = document.createElement("small");
+        ai.textContent = "AI bot";
+        chip.appendChild(ai);
+      }
+      if (state.online.devicePlayers.includes(player.name)) {
         chip.classList.add("local");
         const local = document.createElement("small");
         local.textContent = "This device";
@@ -809,7 +1169,10 @@
   }
 
   function createInitialGameSnapshot(orderedNames, orderDetail) {
-    const players = orderedNames.map((name) => ({ name, score: 0 }));
+    const players = orderedNames.map((player) => {
+      const normalized = normalizePlayerEntry(player);
+      return { name: normalized.name, score: 0, isAi: normalized.isAi };
+    });
     const first = players[0];
     return {
       players,
@@ -830,6 +1193,7 @@
         dice: [],
         options: [],
         selectedOptionIndex: null,
+        aiExplanation: "",
         phase: "await-roll",
         rollId: 0
       }
@@ -837,8 +1201,13 @@
   }
 
   async function startOnlineGame(orderMode) {
-    if (!state.online.isHost || !state.online.roomData) return;
-    const players = roomPlayerNames(state.online.roomData);
+    if (!state.online.roomCode || !state.online.deviceId) return;
+    await loadFirebase();
+    const snapshot = await state.online.firebase.get(roomRef());
+    const roomData = snapshot.val();
+    if (!roomData || roomData.hostDeviceId !== state.online.deviceId) return;
+    const players = roomPlayers(roomData);
+    if (!players.length) return;
     const plan = getOrderPlan(players, orderMode);
     const game = createInitialGameSnapshot(plan.orderedNames, plan.orderDetail);
     await state.online.firebase.update(roomRef(), {
@@ -850,7 +1219,7 @@
 
   function currentGameSnapshot() {
     return {
-      players: state.players.map((player) => ({ name: player.name, score: player.score })),
+      players: state.players.map((player) => ({ name: player.name, score: player.score, isAi: player.isAi })),
       currentIndex: state.currentIndex,
       finalRound: state.finalRound,
       playedFinalTurns: { ...state.playedFinalTurns },
@@ -858,7 +1227,7 @@
       inheritedFreeDice: state.inheritedFreeDice,
       previousTurnPlayer: state.previousTurnPlayer,
       gameOver: state.gameOver,
-      log: state.log.slice(0, 10),
+      log: state.log.slice(0, 18),
       turn: state.turn
         ? {
             playerName: state.turn.playerName,
@@ -869,6 +1238,7 @@
             dice: state.turn.dice.slice(),
             options: cloneCombos(state.turn.options || []),
             selectedOptionIndex: state.turn.selectedOptionIndex,
+            aiExplanation: state.turn.aiExplanation || "",
             phase: state.turn.phase,
             rollId: state.turn.rollId || 0
           }
@@ -905,6 +1275,7 @@
   function prepareNextTurn() {
     const player = currentPlayer();
     const hasInheritedOffer = state.inheritedScore > 0;
+    clearAiActionTimer();
     state.turn = {
       playerName: player.name,
       inheritedScore: hasInheritedOffer ? state.inheritedScore : 0,
@@ -914,6 +1285,7 @@
       dice: [],
       options: [],
       selectedOptionIndex: null,
+      aiExplanation: "",
       phase: hasInheritedOffer ? "offer" : "await-roll"
     };
 
@@ -950,6 +1322,7 @@
     turn.dice = rollDice(turn.freeDice);
     turn.options = calculateScoreRecursive(turn.dice);
     turn.selectedOptionIndex = null;
+    turn.aiExplanation = "";
     turn.rollId = (turn.rollId || 0) + 1;
 
     if (turn.options.length === 0) {
@@ -975,8 +1348,10 @@
     turn.selectedOptionIndex = index;
     turn.looseScore += option.points;
     turn.freeDice = option.remainingDice.length;
+    const optionDetail = option.descriptions.length ? ` (${option.descriptions.join(" + ")})` : "";
     turn.dice = [];
     turn.options = [];
+    turn.aiExplanation = "";
 
     if (turn.freeDice === 0) {
       turn.lockedPoints += turn.looseScore;
@@ -987,7 +1362,7 @@
       turn.phase = "await-roll";
     } else {
       turn.phase = "choose-next";
-      addLog(`${turn.playerName} scores ${formatScore(option.points)} with ${turn.freeDice} free dice.`);
+      addLog(`${turn.playerName} scores ${formatScore(option.points)}${optionDetail}, leaving ${turn.freeDice} free dice.`);
     }
     renderAndSync();
   }
@@ -1043,6 +1418,163 @@
     clearTimeout(state.autoChoice.timeoutId);
     clearInterval(state.autoChoice.intervalId);
     state.autoChoice = null;
+  }
+
+  function clearAiActionTimer() {
+    if (!state.aiAction) return;
+    clearTimeout(state.aiAction.timeoutId);
+    state.aiAction = null;
+  }
+
+  function startAiActionTimer(key, delayMs, action) {
+    if (state.aiAction && state.aiAction.key === key) return;
+    clearAiActionTimer();
+    state.aiAction = {
+      key,
+      timeoutId: setTimeout(() => {
+        state.aiAction = null;
+        action();
+      }, delayMs)
+    };
+  }
+
+  function aiTurnView() {
+    const turn = state.turn || {};
+    return {
+      player: currentPlayer(),
+      scores: state.players.map((player) => player.score),
+      inheritedScore: state.inheritedScore,
+      inheritedFreeDice: state.inheritedFreeDice,
+      lockedPoints: Number(turn.lockedPoints || 0),
+      looseScore: Number(turn.looseScore || 0),
+      freeDice: Number(turn.freeDice || 10),
+      finalRound: state.finalRound
+    };
+  }
+
+  function aiShouldBuild() {
+    const buildValue = evRollValue(state.inheritedScore, state.inheritedFreeDice);
+    const freshValue = evRollValue(0, 10);
+    return {
+      build: state.inheritedScore > 0 && buildValue > freshValue,
+      buildValue,
+      freshValue
+    };
+  }
+
+  function aiShouldBank() {
+    const view = aiTurnView();
+    const earned = view.lockedPoints + view.looseScore;
+    const totalIfBank = view.player.score + earned;
+    const otherBest = Math.max(0, ...state.players.filter((player) => player !== view.player).map((player) => player.score));
+
+    if (view.finalRound && totalIfBank > otherBest) {
+      return {
+        bank: true,
+        reason: `banking passes the leader at ${formatScore(totalIfBank)}`
+      };
+    }
+
+    if (!view.finalRound && totalIfBank >= TARGET_SCORE) {
+      return {
+        bank: true,
+        reason: `banking reaches the ${formatScore(TARGET_SCORE)} target`
+      };
+    }
+
+    if (view.finalRound && totalIfBank <= otherBest) {
+      return {
+        bank: false,
+        reason: `banking would still trail ${formatScore(otherBest)}`
+      };
+    }
+
+    const decision = evChooseAfterScore(view.looseScore, view.freeDice);
+    return {
+      bank: decision.action === "bank",
+      reason: `EV bank ${formatScore(decision.bankValue)} vs roll ${formatScore(Math.round(decision.rollValue))}`
+    };
+  }
+
+  function describeOptionChoice(choice) {
+    const option = choice.option;
+    const decision = choice.decision;
+    const used = option.usedDice.slice().sort((a, b) => a - b).join(", ");
+    const detail = option.descriptions.join(" + ");
+    return `${state.turn.playerName} chooses ${formatScore(option.points)} with [${used}]${detail ? `: ${detail}` : ""}. ` +
+      `It leaves ${option.remainingDice.length} free dice; EV says ${decision.action} ` +
+      `(${formatScore(Math.round(decision.value))} value).`;
+  }
+
+  function maybeScheduleAiAction() {
+    const turn = state.turn;
+    if (!turn || state.gameOver || !isCurrentTurnAi() || !isCurrentTurnLocal()) {
+      clearAiActionTimer();
+      return;
+    }
+
+    if (turn.phase === "offer") {
+      const key = `ai:offer:${state.currentIndex}:${state.inheritedScore}:${state.inheritedFreeDice}`;
+      startAiActionTimer(key, AI_DELAY_MS.offer, () => {
+        const decision = aiShouldBuild();
+        addLog(
+          `${turn.playerName} compares build ${formatScore(Math.round(decision.buildValue))} EV vs fresh ` +
+            `${formatScore(Math.round(decision.freshValue))} EV, then ${decision.build ? "builds" : "starts fresh"}.`
+        );
+        acceptInheritedTurn(decision.build);
+      });
+      return;
+    }
+
+    if (turn.phase === "await-roll") {
+      const key = `ai:roll:${state.currentIndex}:${turn.freeDice}:${turn.lockedPoints}:${turn.looseScore}:${turn.rollId || 0}`;
+      startAiActionTimer(key, AI_DELAY_MS.roll, () => {
+        addLog(`${turn.playerName} rolls ${turn.freeDice} dice.`);
+        rollForTurn();
+      });
+      return;
+    }
+
+    if (turn.phase === "choose-option") {
+      const rollId = turn.rollId || 0;
+      if (Number.isInteger(turn.selectedOptionIndex)) {
+        return;
+      }
+
+      const key = `ai:choose-option:${state.currentIndex}:${rollId}`;
+      startAiActionTimer(key, AI_DELAY_MS.optionThink, () => {
+        const choice = bestEvOption(turn);
+        if (!choice) return;
+        turn.selectedOptionIndex = choice.index;
+        turn.aiExplanation = describeOptionChoice(choice);
+        addLog(turn.aiExplanation);
+        renderAndSync();
+        startAiActionTimer(`ai:take-option:${state.currentIndex}:${rollId}:${choice.index}`, AI_DELAY_MS.optionTake, () => {
+          selectOption(choice.index);
+        });
+      });
+      return;
+    }
+
+    if (turn.phase === "choose-next") {
+      const decision = aiShouldBank();
+      const key = `ai:next:${state.currentIndex}:${turn.freeDice}:${turn.lockedPoints}:${turn.looseScore}:${turn.rollId || 0}`;
+      turn.aiExplanation = `${turn.playerName} is deciding whether to bank or roll: ${decision.reason}.`;
+      startAiActionTimer(key, AI_DELAY_MS.next, () => {
+        addLog(`${turn.playerName} ${decision.bank ? "banks" : "keeps rolling"} because ${decision.reason}.`);
+        if (decision.bank) finishTurn(false);
+        else rollForTurn();
+      });
+      return;
+    }
+
+    if (turn.phase === "zilch") {
+      const key = `ai:zilch:${state.currentIndex}:${turn.rollId || 0}`;
+      startAiActionTimer(key, AI_DELAY_MS.zilch, () => finishTurn(true));
+      return;
+    }
+
+    clearAiActionTimer();
   }
 
   function updateAutoChoiceCountdown() {
@@ -1144,6 +1676,7 @@
 
   function remoteTurnSummary(turn) {
     if (!turn) return "";
+    if (turn.aiExplanation) return turn.aiExplanation;
     if (turn.phase === "offer") {
       return `${turn.playerName} is choosing whether to build on ${formatScore(state.inheritedScore)} or roll all 10.`;
     }
@@ -1169,13 +1702,15 @@
     const copy = document.getElementById("remote-turn-copy");
     const dice = document.getElementById("remote-turn-dice");
     const turn = state.turn;
+    const isAiTurn = Boolean(turn && isCurrentTurnAi() && !state.gameOver);
     const isRemoteTurn = Boolean(turn && isRoomMode() && !isCurrentTurnLocal() && !state.gameOver);
+    const shouldShow = isRemoteTurn || isAiTurn;
 
-    panel.classList.toggle("hidden", !isRemoteTurn);
-    if (!isRemoteTurn) return;
+    panel.classList.toggle("hidden", !shouldShow);
+    if (!shouldShow) return;
 
     panel.classList.toggle("zilch", turn.phase === "zilch");
-    label.textContent = "Waiting on another device";
+    label.textContent = isAiTurn ? "AI bot thinking" : "Waiting on another device";
     title.textContent = `${turn.playerName}'s move`;
     copy.textContent = remoteTurnSummary(turn);
     dice.innerHTML = "";
@@ -1198,6 +1733,7 @@
       const card = document.createElement("article");
       card.className = "score-card";
       if (index === state.currentIndex && !state.gameOver) card.classList.add("active");
+      if (player.isAi) card.classList.add("ai-player");
       if (isRoomMode() && isPlayerOnThisDevice(player.name)) card.classList.add("on-this-device");
       if (state.finalRound && state.playedFinalTurns[player.name]) card.classList.add("final-done");
       const name = document.createElement("span");
@@ -1205,6 +1741,11 @@
       const score = document.createElement("strong");
       score.textContent = formatScore(player.score);
       card.append(name, score);
+      if (player.isAi) {
+        const badge = document.createElement("small");
+        badge.textContent = "AI bot";
+        card.appendChild(badge);
+      }
       if (isRoomMode() && isPlayerOnThisDevice(player.name)) {
         const badge = document.createElement("small");
         badge.textContent = "This device";
@@ -1219,12 +1760,15 @@
     panel.innerHTML = "";
     const turn = state.turn;
     if (!turn || turn.phase !== "choose-option") return;
-    const localTurn = isCurrentTurnLocal();
+    const localTurn = isCurrentTurnHumanLocal();
 
     turn.options.forEach((option, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "option-card";
+      if (turn.selectedOptionIndex === index) {
+        button.classList.add(isCurrentTurnAi() ? "ai-choice" : "selected");
+      }
       button.disabled = !localTurn;
       if (!localTurn) button.classList.add("remote-option");
       button.addEventListener("click", () => selectOption(index));
@@ -1280,7 +1824,7 @@
     const bankButton = document.getElementById("bank-turn");
     const rollPanel = document.getElementById("roll-panel");
     const rollMessage = document.getElementById("roll-message");
-    const localTurn = isCurrentTurnLocal();
+    const localTurn = isCurrentTurnHumanLocal();
 
     offerPanel.classList.toggle("hidden", !turn || turn.phase !== "offer" || !localTurn);
     rollPanel.classList.toggle("hidden", !turn || turn.phase === "offer" || turn.phase === "game-over");
@@ -1369,6 +1913,7 @@
     renderTurnControls();
     renderGameOver();
     renderLog();
+    maybeScheduleAiAction();
   }
 
   function bindEvents() {
@@ -1386,7 +1931,7 @@
       });
 
       try {
-        await startGame(getSetupPlayerNames(), orderMode);
+        await startGame(getSetupPlayers(), orderMode);
       } catch (error) {
         buttons.forEach((button) => {
           button.disabled = false;
@@ -1395,10 +1940,12 @@
       }
     });
 
-    document.getElementById("add-player").addEventListener("click", () => addPlayerInput());
+    document.getElementById("add-player").addEventListener("click", () => addLocalPlayerEntry("", false));
+    document.getElementById("add-ai-player").addEventListener("click", () => addLocalPlayerEntry(nextAiName(), true));
+    document.getElementById("add-online-player").addEventListener("click", () => addOnlinePlayerEntry("", false));
     document
-      .getElementById("add-online-player")
-      .addEventListener("click", () => addPlayerInput("", "online-player-list", "online-player-name-input"));
+      .getElementById("add-online-ai-player")
+      .addEventListener("click", () => addOnlinePlayerEntry(nextAiName("online-player-list"), true));
     document.getElementById("room-action").addEventListener("click", handleRoomAction);
     document.getElementById("copy-room-code").addEventListener("click", async () => {
       const code = state.online.roomCode;
