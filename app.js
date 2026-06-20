@@ -67,6 +67,7 @@
     next: 1250,
     zilch: 1400
   };
+  const AI_ASSIST_DELAY_MS = 250;
   const EV_STEP = 50;
   const EV_MAX_LOOSE = 8000;
   const EV_HORIZON = 5;
@@ -1779,7 +1780,7 @@
       };
     }
 
-    startAiAssistTimer(key, AI_DELAY_MS.optionThink, () => {
+    startAiAssistTimer(key, AI_ASSIST_DELAY_MS, () => {
       const activeKey = aiAssistKey();
       if (activeKey !== key) return;
       const advice = buildAiAssistAdvice();
