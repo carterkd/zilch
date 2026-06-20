@@ -72,71 +72,113 @@
     {
       title: "Race to 20,000",
       copy:
-        "Each turn, roll dice and collect scoring combinations. Bank enough points to reach 20,000; when someone gets there, everyone else gets one final chance.",
+        "Roll dice, choose scoring dice, and bank points. The first player to reach 20,000 starts the final round; every other player gets one last turn to beat the leader.",
       dice: [1, 2, 3, 4, 5, 6],
       stats: [
         ["Target", "20,000"],
-        ["Final round", "One last chance"]
+        ["Winner", "Highest score after final round"]
       ]
     },
     {
-      title: "Choose scoring dice",
+      title: "Basic scoring",
       copy:
-        "After a roll, pick one legal score. Ones, fives, triples, straights, and bigger sets can score. Dice you do not use stay free for the next roll.",
-      dice: [1, 1, 5, 5, 5, 2],
+        "Single 1s score 100. Single 5s score 50. A straight of 1-2-3-4-5-6 in one roll scores 1,500.",
+      dice: [1, 2, 3, 4, 5, 6],
       stats: [
-        ["Example", "500 for three 5s"],
-        ["Free dice", "3 left"]
+        ["One", "100"],
+        ["Five", "50"],
+        ["Straight", "1,500"]
       ]
     },
     {
-      title: "Loose points are at risk",
+      title: "Triples and bigger sets",
       copy:
-        "Loose points are the points you are building this turn. Roll again to chase more, or bank to add them to your permanent score.",
-      dice: [1, 3, 4, 5],
+        "Three 1s score 1,000. Three 2s through 6s score face value times 100. For 4 to 10 of a kind, score 1,000 for four, then add 1,000 for each extra die.",
+      dice: [5, 5, 5, 2, 2, 2],
       stats: [
-        ["Loose", "650"],
+        ["Three 5s", "500"],
+        ["Four of a kind", "1,000"],
+        ["Ten of a kind", "7,000"]
+      ]
+    },
+    {
+      title: "Pick one scoring option",
+      copy:
+        "After each roll, choose one legal option. If all three 5s are taken, they score 500, not 150 as singles. If all three 1s are taken, they score 1,000, not 300. Dice not used stay free.",
+      dice: [1, 5, 5, 5, 2, 6],
+      stats: [
+        ["Take 5-5-5", "500"],
+        ["Take 1", "100"],
+        ["Free dice", "Unused dice"]
+      ]
+    },
+    {
+      title: "A Zilch ends the turn",
+      copy:
+        "A Zilch is a roll with no scoring dice. Your turn ends immediately: locked points stay safe, loose points are lost, and the next player starts fresh.",
+      dice: [2, 3, 4, 6],
+      stats: [
+        ["No 1s or 5s", "No score"],
+        ["No triples", "Zilch"],
+        ["Button", "Accept Zilch"]
+      ]
+    },
+    {
+      title: "Locked and loose points",
+      copy:
+        "Loose points are still at risk. If you score with every free die, those points move into Locked and all 10 dice reload. Locked points survive a later Zilch.",
+      dice: [1, 2, 3, 4, 5, 6],
+      stats: [
+        ["Loose", "Risky"],
+        ["Locked", "Safe this turn"],
+        ["Reload", "All 10 dice"]
+      ]
+    },
+    {
+      title: "What the boxes mean",
+      copy:
+        "Inherited is the previous bank you may build on; if you build and score, it counts in Loose. Locked is safe this turn. Loose is at risk. Free dice can be rolled. Safe total is score plus locked. Bank total is score plus locked plus loose.",
+      dice: [1, 5, 5],
+      stats: [
+        ["Inherited", "Previous bank"],
+        ["Locked", "Safe points"],
+        ["Loose", "Risky points"],
+        ["Free dice", "Can roll"],
+        ["Safe total", "Score + locked"],
         ["Bank total", "Score + locked + loose"]
       ]
     },
     {
-      title: "Hot dice become locked",
+      title: "Bank or roll",
       copy:
-        "If you score with every free die, those points lock in and all 10 dice reload. Locked points survive a Zilch, but loose points do not.",
-      dice: [1, 2, 3, 4, 5, 6],
+        "Banking adds this turn's locked and loose points to your score, making the displayed Bank total your new score. It also leaves the unused free dice for the next player. Rolling again can earn more, but a Zilch loses loose points.",
+      dice: [1, 1, 5, 3],
       stats: [
-        ["Locked", "Safe this turn"],
-        ["Safe total", "Score + locked"]
+        ["Bank", "Keep points"],
+        ["Roll", "Risk loose points"],
+        ["Free dice", "Passed to next player"]
       ]
     },
     {
-      title: "Zilch means no scoring dice",
+      title: "Building on inherited points",
       copy:
-        "If a roll has no score, the turn ends. You keep locked points, lose loose points, and press Accept Zilch to move on.",
-      dice: [2, 3, 4, 6],
+        "If the previous player banks with free dice left, you may build by rolling only those dice. You must score on that build roll to keep the inherited points; if you Zilch, you lose them and the next player starts fresh.",
+      dice: [1, 5, 2],
       stats: [
-        ["Zilch", "No score"],
-        ["Next", "Accept Zilch"]
+        ["Build", "Roll free dice"],
+        ["Must score", "To inherit"],
+        ["Zilch", "Inheritance gone"]
       ]
     },
     {
-      title: "Build on the last turn",
+      title: "People, rooms, and AI",
       copy:
-        "When someone banks, the next player may build on those inherited points with the remaining free dice, or ignore them and roll all 10.",
-      dice: [1, 5, 5],
-      stats: [
-        ["Inherited", "Previous bank"],
-        ["Choice", "Build or roll all 10"]
-      ]
-    },
-    {
-      title: "Use people, rooms, and AI",
-      copy:
-        "Play on one device, create a room code for multiple devices, add AI bots, or turn on AI Assist for a human player to see recommendations.",
+        "Play on one device, create a room code for multiple devices, add AI bots, toggle AI speed, or turn on AI Assist for a human player to see recommendations.",
       dice: [6, 6, 6],
       stats: [
         ["Human", "You decide"],
-        ["AI Assist", "Shows advice"]
+        ["AI Assist", "Advice only"],
+        ["Speedy AI bot", "Fast autoplay"]
       ]
     }
   ];
