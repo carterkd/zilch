@@ -1297,7 +1297,7 @@
       chip.appendChild(label);
       if (player.isAi) {
         const ai = document.createElement("small");
-        ai.textContent = isAiSpeedPlayer(player) ? "AI speed" : "AI bot";
+        ai.textContent = isAiSpeedPlayer(player) ? "Speedy AI bot" : "AI bot";
         chip.appendChild(ai);
       }
       if (hasAiAssist(player)) {
@@ -2076,7 +2076,7 @@
       card.append(name, score);
       if (player.isAi) {
         const badge = document.createElement("small");
-        badge.textContent = isAiSpeedPlayer(player) ? "AI speed" : "AI bot";
+        badge.textContent = isAiSpeedPlayer(player) ? "Speedy AI bot" : "AI bot";
         card.appendChild(badge);
       }
       if (hasAiAssist(player)) {
