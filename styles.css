@@ -269,6 +269,129 @@ button:disabled {
   font-weight: 650;
 }
 
+.tutorial-launch {
+  min-height: 3rem;
+  width: 100%;
+  margin-top: .25rem;
+}
+
+.tutorial-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(25 24 22 / 48%);
+}
+
+.tutorial-card {
+  width: min(40rem, 100%);
+  max-height: min(42rem, calc(100vh - 2rem));
+  display: grid;
+  gap: .85rem;
+  position: relative;
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 1.4rem);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.tutorial-close {
+  position: absolute;
+  top: .75rem;
+  right: .75rem;
+  width: 2.4rem;
+  min-height: 2.4rem;
+  padding: 0;
+}
+
+.tutorial-card h2 {
+  margin: 0;
+  padding-right: 2.5rem;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+  line-height: 1;
+}
+
+.tutorial-card p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.tutorial-dice {
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+.tutorial-dice .mini-die {
+  width: 2.4rem;
+  background: white;
+  box-shadow: 0 8px 16px rgb(25 24 22 / 12%);
+}
+
+.tutorial-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: .55rem;
+}
+
+.tutorial-stat {
+  min-width: 0;
+  padding: .65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8f3e8;
+}
+
+.tutorial-stat span {
+  display: block;
+  color: var(--blue);
+  font-size: .68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tutorial-stat strong {
+  display: block;
+  margin-top: .2rem;
+  font-size: 1.15rem;
+}
+
+.tutorial-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.tutorial-dots {
+  display: flex;
+  gap: .35rem;
+}
+
+.tutorial-dot {
+  width: .55rem;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: #d8d0c1;
+}
+
+.tutorial-dot.active {
+  background: var(--gold);
+}
+
+.tutorial-actions {
+  display: flex;
+  gap: .5rem;
+}
+
 .online-room-panel {
   display: grid;
   gap: .75rem;

@@ -29,6 +29,7 @@
             <strong>Join online room</strong>
             <span>Enter a code and add the players using this device.</span>
           </button>
+          <button id="tutorial-open" class="tutorial-launch" type="button">Tutorial</button>
 
           <div id="online-room-panel" class="online-room-panel hidden">
             <h2 id="online-room-title">Online rooms</h2>
@@ -219,7 +220,25 @@
       </section>
     </main>
 
-    <script src="firebase-config.js?v=20260620-speedy-ai"></script>
-    <script src="app.js?v=20260620-speedy-ai"></script>
+    <div id="tutorial-modal" class="tutorial-modal hidden" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+      <section class="tutorial-card">
+        <button id="tutorial-close" class="tutorial-close" type="button" aria-label="Close tutorial">X</button>
+        <p id="tutorial-kicker" class="eyebrow">Tutorial</p>
+        <h2 id="tutorial-title">How Zilch works</h2>
+        <div id="tutorial-dice" class="tutorial-dice" aria-label="Example dice"></div>
+        <p id="tutorial-copy"></p>
+        <div id="tutorial-stats" class="tutorial-stats"></div>
+        <div class="tutorial-footer">
+          <div id="tutorial-dots" class="tutorial-dots" aria-label="Tutorial progress"></div>
+          <div class="tutorial-actions">
+            <button id="tutorial-prev" type="button">Back</button>
+            <button id="tutorial-next" class="primary-action" type="button">Next</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="firebase-config.js?v=20260620-tutorial"></script>
+    <script src="app.js?v=20260620-tutorial"></script>
   </body>
 </html>

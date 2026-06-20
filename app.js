@@ -68,6 +68,78 @@
     zilch: 1400
   };
   const AI_ASSIST_DELAY_MS = 0;
+  const TUTORIAL_STEPS = [
+    {
+      title: "Race to 20,000",
+      copy:
+        "Each turn, roll dice and collect scoring combinations. Bank enough points to reach 20,000; when someone gets there, everyone else gets one final chance.",
+      dice: [1, 2, 3, 4, 5, 6],
+      stats: [
+        ["Target", "20,000"],
+        ["Final round", "One last chance"]
+      ]
+    },
+    {
+      title: "Choose scoring dice",
+      copy:
+        "After a roll, pick one legal score. Ones, fives, triples, straights, and bigger sets can score. Dice you do not use stay free for the next roll.",
+      dice: [1, 1, 5, 5, 5, 2],
+      stats: [
+        ["Example", "500 for three 5s"],
+        ["Free dice", "3 left"]
+      ]
+    },
+    {
+      title: "Loose points are at risk",
+      copy:
+        "Loose points are the points you are building this turn. Roll again to chase more, or bank to add them to your permanent score.",
+      dice: [1, 3, 4, 5],
+      stats: [
+        ["Loose", "650"],
+        ["Bank total", "Score + locked + loose"]
+      ]
+    },
+    {
+      title: "Hot dice become locked",
+      copy:
+        "If you score with every free die, those points lock in and all 10 dice reload. Locked points survive a Zilch, but loose points do not.",
+      dice: [1, 2, 3, 4, 5, 6],
+      stats: [
+        ["Locked", "Safe this turn"],
+        ["Safe total", "Score + locked"]
+      ]
+    },
+    {
+      title: "Zilch means no scoring dice",
+      copy:
+        "If a roll has no score, the turn ends. You keep locked points, lose loose points, and press Accept Zilch to move on.",
+      dice: [2, 3, 4, 6],
+      stats: [
+        ["Zilch", "No score"],
+        ["Next", "Accept Zilch"]
+      ]
+    },
+    {
+      title: "Build on the last turn",
+      copy:
+        "When someone banks, the next player may build on those inherited points with the remaining free dice, or ignore them and roll all 10.",
+      dice: [1, 5, 5],
+      stats: [
+        ["Inherited", "Previous bank"],
+        ["Choice", "Build or roll all 10"]
+      ]
+    },
+    {
+      title: "Use people, rooms, and AI",
+      copy:
+        "Play on one device, create a room code for multiple devices, add AI bots, or turn on AI Assist for a human player to see recommendations.",
+      dice: [6, 6, 6],
+      stats: [
+        ["Human", "You decide"],
+        ["AI Assist", "Shows advice"]
+      ]
+    }
+  ];
   const EV_STEP = 50;
   const EV_MAX_LOOSE = 8000;
   const EV_HORIZON = 5;
@@ -99,6 +171,7 @@
     aiAction: null,
     aiAssistAction: null,
     aiAssistAdvice: null,
+    tutorialIndex: 0,
     room: {
       mode: "local",
       devicePlayers: []
@@ -2000,6 +2073,65 @@
     values.forEach((value) => diceRow.appendChild(createDie(value)));
   }
 
+  function renderTutorial() {
+    const step = TUTORIAL_STEPS[state.tutorialIndex];
+    if (!step) return;
+    document.getElementById("tutorial-title").textContent = step.title;
+    document.getElementById("tutorial-copy").textContent = step.copy;
+
+    const dice = document.getElementById("tutorial-dice");
+    dice.innerHTML = "";
+    step.dice.forEach((value) => dice.appendChild(createDie(value, true)));
+
+    const stats = document.getElementById("tutorial-stats");
+    stats.innerHTML = "";
+    step.stats.forEach(([label, value]) => {
+      const item = document.createElement("div");
+      item.className = "tutorial-stat";
+      const statLabel = document.createElement("span");
+      statLabel.textContent = label;
+      const statValue = document.createElement("strong");
+      statValue.textContent = value;
+      item.append(statLabel, statValue);
+      stats.appendChild(item);
+    });
+
+    const dots = document.getElementById("tutorial-dots");
+    dots.innerHTML = "";
+    TUTORIAL_STEPS.forEach((_, index) => {
+      const dot = document.createElement("span");
+      dot.className = `tutorial-dot${index === state.tutorialIndex ? " active" : ""}`;
+      dots.appendChild(dot);
+    });
+
+    document.getElementById("tutorial-prev").disabled = state.tutorialIndex === 0;
+    document.getElementById("tutorial-next").textContent =
+      state.tutorialIndex === TUTORIAL_STEPS.length - 1 ? "Done" : "Next";
+  }
+
+  function openTutorial() {
+    state.tutorialIndex = 0;
+    renderTutorial();
+    document.getElementById("tutorial-modal").classList.remove("hidden");
+    document.getElementById("tutorial-next").focus();
+  }
+
+  function closeTutorial() {
+    document.getElementById("tutorial-modal").classList.add("hidden");
+    document.getElementById("tutorial-open").focus();
+  }
+
+  function stepTutorial(direction) {
+    const nextIndex = state.tutorialIndex + direction;
+    if (nextIndex < 0) return;
+    if (nextIndex >= TUTORIAL_STEPS.length) {
+      closeTutorial();
+      return;
+    }
+    state.tutorialIndex = nextIndex;
+    renderTutorial();
+  }
+
   function remoteTurnSummary(turn) {
     if (!turn) return "";
     if (turn.aiExplanation) return turn.aiExplanation;
@@ -2292,6 +2424,18 @@
     document.getElementById("local-mode").addEventListener("click", showSetupScreen);
     document.getElementById("create-room-mode").addEventListener("click", () => showOnlineRoomPanel("create"));
     document.getElementById("join-room-mode").addEventListener("click", () => showOnlineRoomPanel("join"));
+    document.getElementById("tutorial-open").addEventListener("click", openTutorial);
+    document.getElementById("tutorial-close").addEventListener("click", closeTutorial);
+    document.getElementById("tutorial-prev").addEventListener("click", () => stepTutorial(-1));
+    document.getElementById("tutorial-next").addEventListener("click", () => stepTutorial(1));
+    document.getElementById("tutorial-modal").addEventListener("click", (event) => {
+      if (event.target.id === "tutorial-modal") closeTutorial();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !document.getElementById("tutorial-modal").classList.contains("hidden")) {
+        closeTutorial();
+      }
+    });
 
     document.getElementById("setup-form").addEventListener("submit", async (event) => {
       event.preventDefault();
