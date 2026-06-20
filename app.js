@@ -67,7 +67,7 @@
     next: 1250,
     zilch: 1400
   };
-  const AI_ASSIST_DELAY_MS = 250;
+  const AI_ASSIST_DELAY_MS = 0;
   const EV_STEP = 50;
   const EV_MAX_LOOSE = 8000;
   const EV_HORIZON = 5;
