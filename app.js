@@ -96,6 +96,8 @@
     log: [],
     autoChoice: null,
     aiAction: null,
+    aiAssistAction: null,
+    aiAssistAdvice: null,
     room: {
       mode: "local",
       devicePlayers: []
@@ -457,24 +459,25 @@
 
   function normalizePlayerEntry(player, fallbackAi = false) {
     if (typeof player === "string") {
-      return { name: player.trim(), score: 0, isAi: fallbackAi };
+      return { name: player.trim(), score: 0, isAi: fallbackAi, aiAssist: false };
     }
 
     return {
       name: String(player && player.name ? player.name : "").trim(),
       score: Number(player && player.score ? player.score : 0),
-      isAi: Boolean(player && player.isAi)
+      isAi: Boolean(player && player.isAi),
+      aiAssist: Boolean(player && player.aiAssist && !player.isAi)
     };
   }
 
   function parsePlayerEntries(rawPlayers, fallback = [
-    { name: "Carter", isAi: false }
+    { name: "Carter", isAi: false, aiAssist: false }
   ]) {
     const unique = [];
     listValues(rawPlayers).forEach((rawPlayer) => {
       const player = normalizePlayerEntry(rawPlayer);
       if (!player.name || unique.some((item) => item.name === player.name)) return;
-      unique.push({ name: player.name, isAi: player.isAi });
+      unique.push({ name: player.name, isAi: player.isAi, aiAssist: player.aiAssist });
     });
     return unique.length ? unique : fallback.map((player) => ({ ...player }));
   }
@@ -637,6 +640,24 @@
     return `Zilchbot ${Date.now().toString(36).slice(-4).toUpperCase()}`;
   }
 
+  function playerKindText(kind) {
+    if (kind === "ai") return "AI";
+    if (kind === "assist") return "Human (AI assist)";
+    return "Human";
+  }
+
+  function updatePlayerEntryKind(entry, kind = entry.dataset.kind || "human") {
+    entry.dataset.kind = kind;
+    entry.classList.toggle("ai", kind === "ai");
+    entry.classList.toggle("assist", kind === "assist");
+    const button = entry.querySelector(".player-kind");
+    if (button) {
+      button.textContent = playerKindText(kind);
+      button.disabled = kind === "ai";
+      button.setAttribute("aria-label", kind === "assist" ? "Disable AI assist" : "Enable AI assist");
+    }
+  }
+
   function addPlayerEntry(value = "", isAi = false, listId = "player-list", extraClass = "") {
     const list = document.getElementById(listId);
     if (!list) return;
@@ -654,9 +675,10 @@
     input.setAttribute("aria-label", `${isAi ? "AI" : "Player"} ${list.children.length + 1}`);
     markDefaultNameInput(input, value);
 
-    const kind = document.createElement("span");
+    const kind = document.createElement("button");
     kind.className = "player-kind";
-    kind.textContent = isAi ? "AI" : "Human";
+    kind.type = "button";
+    kind.textContent = playerKindText(entry.dataset.kind);
 
     const remove = document.createElement("button");
     remove.className = "player-remove";
@@ -666,10 +688,26 @@
 
     entry.append(input, kind, remove);
     list.appendChild(entry);
+    updatePlayerEntryKind(entry, entry.dataset.kind);
     installNameInputBehavior(entry);
+    installPlayerKindBehavior(entry);
     installPlayerRemoveBehavior(entry);
     input.focus();
     input.select();
+  }
+
+  function installPlayerKindBehavior(root = document) {
+    root.querySelectorAll(".player-kind").forEach((button) => {
+      if (button.dataset.kindReady === "true") return;
+      button.dataset.kindReady = "true";
+      button.addEventListener("click", () => {
+        const entry = button.closest(".player-entry");
+        if (!entry || entry.dataset.kind === "ai") return;
+        updatePlayerEntryKind(entry, entry.dataset.kind === "assist" ? "human" : "assist");
+      });
+      const entry = button.closest(".player-entry");
+      if (entry) updatePlayerEntryKind(entry, entry.dataset.kind || "human");
+    });
   }
 
   function installPlayerRemoveBehavior(root = document) {
@@ -697,10 +735,7 @@
     entries.forEach((entry, index) => {
       const input = entry.querySelector(".player-name-input");
       if (index < ONLINE_DEFAULT_PLAYERS.length) {
-        entry.dataset.kind = "human";
-        entry.classList.remove("ai");
-        const kind = entry.querySelector(".player-kind");
-        if (kind) kind.textContent = "Human";
+        updatePlayerEntryKind(entry, "human");
         if (input) {
           input.value = ONLINE_DEFAULT_PLAYERS[index];
           markDefaultNameInput(input, ONLINE_DEFAULT_PLAYERS[index]);
@@ -717,25 +752,27 @@
   function getSetupPlayers() {
     const entries = Array.from(document.querySelectorAll("#player-list .player-entry")).map((entry) => ({
       name: entry.querySelector(".player-name-input") ? entry.querySelector(".player-name-input").value : "",
-      isAi: entry.dataset.kind === "ai"
+      isAi: entry.dataset.kind === "ai",
+      aiAssist: entry.dataset.kind === "assist"
     }));
 
     if (entries.length) return parsePlayerEntries(entries);
 
     return parsePlayers(Array.from(document.querySelectorAll("#player-list .player-name-input")).map((input) => input.value))
-      .map((name) => ({ name, isAi: false }));
+      .map((name) => ({ name, isAi: false, aiAssist: false }));
   }
 
   function getOnlineDevicePlayers() {
     const entries = Array.from(document.querySelectorAll("#online-player-list .player-entry")).map((entry) => ({
       name: entry.querySelector(".player-name-input") ? entry.querySelector(".player-name-input").value : "",
-      isAi: entry.dataset.kind === "ai"
+      isAi: entry.dataset.kind === "ai",
+      aiAssist: entry.dataset.kind === "assist"
     }));
 
     if (entries.length) return parsePlayerEntries(entries, []);
 
     return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value), [])
-      .map((name) => ({ name, isAi: false }));
+      .map((name) => ({ name, isAi: false, aiAssist: false }));
   }
 
   function showSetupScreen() {
@@ -1060,8 +1097,16 @@
     return Boolean(player && player.isAi);
   }
 
+  function hasAiAssist(player) {
+    return Boolean(player && player.aiAssist && !player.isAi);
+  }
+
   function isCurrentTurnAi() {
     return isAiPlayer(currentPlayer());
+  }
+
+  function isCurrentTurnAiAssistedLocal() {
+    return isCurrentTurnHumanLocal() && hasAiAssist(currentPlayer());
   }
 
   function isRoomMode() {
@@ -1095,7 +1140,7 @@
   function startGameFromOrder(orderedNames, orderDetail, roomContext = { mode: "local", devicePlayers: [] }) {
     state.players = orderedNames.map((player) => {
       const normalized = normalizePlayerEntry(player);
-      return { name: normalized.name, score: 0, isAi: normalized.isAi };
+      return { name: normalized.name, score: 0, isAi: normalized.isAi, aiAssist: normalized.aiAssist };
     });
     state.currentIndex = 0;
     state.finalRound = false;
@@ -1106,9 +1151,11 @@
     state.turn = null;
     state.gameOver = false;
     state.log = [];
+    state.aiAssistAdvice = null;
     setRoomContext(roomContext.mode || "local", roomContext.devicePlayers || []);
     clearAutoChoiceTimer();
     clearAiActionTimer();
+    clearAiAssistTimer();
     addLog(orderDetail);
 
     document.getElementById("setup-screen").classList.add("hidden");
@@ -1119,16 +1166,17 @@
   function normalizeSnapshotPlayers(players) {
     const rawPlayers = listValues(players);
     if (!rawPlayers.length) {
-      return parsePlayers([]).map((name) => ({ name, score: 0, isAi: false }));
+      return parsePlayers([]).map((name) => ({ name, score: 0, isAi: false, aiAssist: false }));
     }
 
     return rawPlayers
       .map((player) => {
-        if (typeof player === "string") return { name: player.trim(), score: 0, isAi: false };
+        if (typeof player === "string") return { name: player.trim(), score: 0, isAi: false, aiAssist: false };
         return {
           name: String(player.name || "").trim(),
           score: Number(player.score || 0),
-          isAi: Boolean(player.isAi)
+          isAi: Boolean(player.isAi),
+          aiAssist: Boolean(player.aiAssist && !player.isAi)
         };
       })
       .filter((player) => player.name);
@@ -1214,6 +1262,7 @@
       const chip = document.createElement("div");
       chip.className = "room-player-chip";
       if (player.isAi) chip.classList.add("ai");
+      if (hasAiAssist(player)) chip.classList.add("assist");
       const label = document.createElement("span");
       label.textContent = player.name;
       chip.appendChild(label);
@@ -1221,6 +1270,11 @@
         const ai = document.createElement("small");
         ai.textContent = "AI bot";
         chip.appendChild(ai);
+      }
+      if (hasAiAssist(player)) {
+        const assist = document.createElement("small");
+        assist.textContent = "AI Assist";
+        chip.appendChild(assist);
       }
       if (state.online.devicePlayers.includes(player.name)) {
         chip.classList.add("local");
@@ -1249,7 +1303,7 @@
   function createInitialGameSnapshot(orderedNames, orderDetail) {
     const players = orderedNames.map((player) => {
       const normalized = normalizePlayerEntry(player);
-      return { name: normalized.name, score: 0, isAi: normalized.isAi };
+      return { name: normalized.name, score: 0, isAi: normalized.isAi, aiAssist: normalized.aiAssist };
     });
     const first = players[0];
     return {
@@ -1297,7 +1351,12 @@
 
   function currentGameSnapshot() {
     return {
-      players: state.players.map((player) => ({ name: player.name, score: player.score, isAi: player.isAi })),
+      players: state.players.map((player) => ({
+        name: player.name,
+        score: player.score,
+        isAi: player.isAi,
+        aiAssist: player.aiAssist
+      })),
       currentIndex: state.currentIndex,
       finalRound: state.finalRound,
       playedFinalTurns: { ...state.playedFinalTurns },
@@ -1354,6 +1413,8 @@
     const player = currentPlayer();
     const hasInheritedOffer = state.inheritedScore > 0;
     clearAiActionTimer();
+    clearAiAssistTimer();
+    state.aiAssistAdvice = null;
     state.turn = {
       playerName: player.name,
       inheritedScore: hasInheritedOffer ? state.inheritedScore : 0,
@@ -1377,6 +1438,8 @@
     const turn = state.turn;
     if (!turn || turn.phase !== "offer") return;
     if (!isCurrentTurnLocal()) return;
+    state.aiAssistAdvice = null;
+    clearAiAssistTimer();
 
     if (build) {
       turn.looseScore = state.inheritedScore;
@@ -1401,6 +1464,8 @@
     turn.options = calculateScoreRecursive(turn.dice);
     turn.selectedOptionIndex = null;
     turn.aiExplanation = "";
+    state.aiAssistAdvice = null;
+    clearAiAssistTimer();
     turn.rollId = (turn.rollId || 0) + 1;
 
     if (turn.options.length === 0) {
@@ -1430,6 +1495,8 @@
     turn.dice = [];
     turn.options = [];
     turn.aiExplanation = "";
+    state.aiAssistAdvice = null;
+    clearAiAssistTimer();
 
     if (turn.freeDice === 0) {
       turn.lockedPoints += turn.looseScore;
@@ -1504,6 +1571,12 @@
     state.aiAction = null;
   }
 
+  function clearAiAssistTimer() {
+    if (!state.aiAssistAction) return;
+    clearTimeout(state.aiAssistAction.timeoutId);
+    state.aiAssistAction = null;
+  }
+
   function startAiActionTimer(key, delayMs, action) {
     if (state.aiAction && state.aiAction.key === key) return;
     clearAiActionTimer();
@@ -1511,6 +1584,18 @@
       key,
       timeoutId: setTimeout(() => {
         state.aiAction = null;
+        action();
+      }, delayMs)
+    };
+  }
+
+  function startAiAssistTimer(key, delayMs, action) {
+    if (state.aiAssistAction && state.aiAssistAction.key === key) return;
+    clearAiAssistTimer();
+    state.aiAssistAction = {
+      key,
+      timeoutId: setTimeout(() => {
+        state.aiAssistAction = null;
         action();
       }, delayMs)
     };
@@ -1595,6 +1680,114 @@
     return `${state.turn.playerName} chooses ${formatScore(option.points)} with [${used}]${detail ? `: ${detail}` : ""}. ` +
       `It leaves ${option.remainingDice.length} free dice; EV says ${decision.action} ` +
       `(${formatScore(Math.round(decision.value))} value).`;
+  }
+
+  function describeAssistOptionChoice(choice) {
+    const option = choice.option;
+    const decision = choice.decision;
+    const used = option.usedDice.slice().sort((a, b) => a - b).join(", ");
+    const detail = option.descriptions.join(" + ");
+    return `Recommendation: take ${formatScore(option.points)} with [${used}]. ` +
+      `${detail ? `${detail}. ` : ""}Leaves ${option.remainingDice.length} free; EV says ${decision.action}.`;
+  }
+
+  function aiAssistKey(turn = state.turn) {
+    if (!turn || state.gameOver || !isCurrentTurnAiAssistedLocal()) return "";
+    return [
+      "assist",
+      state.currentIndex,
+      turn.phase,
+      turn.rollId || 0,
+      turn.lockedPoints || 0,
+      turn.looseScore || 0,
+      turn.freeDice || 0,
+      state.inheritedScore || 0,
+      state.inheritedFreeDice || 0,
+      turn.dice.join("-")
+    ].join(":");
+  }
+
+  function buildAiAssistAdvice(turn = state.turn) {
+    if (!turn) return null;
+
+    if (turn.phase === "offer") {
+      const decision = aiShouldBuild();
+      return {
+        action: decision.build ? "build" : "fresh",
+        text:
+          `Recommendation: ${decision.build ? "build" : "roll all 10"}. ` +
+          `Build EV ${formatScore(Math.round(decision.buildValue))} vs fresh ${formatScore(Math.round(decision.freshValue))}.`
+      };
+    }
+
+    if (turn.phase === "await-roll") {
+      return {
+        action: "roll",
+        text: `Recommendation: roll ${turn.freeDice}. No bankable points are loose yet.`
+      };
+    }
+
+    if (turn.phase === "choose-option") {
+      const choice = bestEvOption(turn);
+      if (!choice) return null;
+      return {
+        action: "option",
+        optionIndex: choice.index,
+        text: describeAssistOptionChoice(choice)
+      };
+    }
+
+    if (turn.phase === "choose-next") {
+      const decision = aiShouldBank();
+      return {
+        action: decision.bank ? "bank" : "roll",
+        text: `Recommendation: ${decision.bank ? "bank" : `roll ${turn.freeDice}`}. ${decision.reason}.`
+      };
+    }
+
+    if (turn.phase === "zilch") {
+      return {
+        action: "accept-zilch",
+        text: "Recommendation: Accept Zilch. The roll has no scoring dice."
+      };
+    }
+
+    return null;
+  }
+
+  function currentAiAssistAdvice() {
+    const key = aiAssistKey();
+    if (!key || !state.aiAssistAdvice || state.aiAssistAdvice.key !== key || !state.aiAssistAdvice.ready) return null;
+    return state.aiAssistAdvice;
+  }
+
+  function maybeScheduleAiAssist() {
+    const turn = state.turn;
+    const key = aiAssistKey(turn);
+    if (!key) {
+      clearAiAssistTimer();
+      state.aiAssistAdvice = null;
+      return;
+    }
+
+    if (state.aiAssistAdvice && state.aiAssistAdvice.key === key && state.aiAssistAdvice.ready) return;
+    if (!state.aiAssistAdvice || state.aiAssistAdvice.key !== key) {
+      state.aiAssistAdvice = {
+        key,
+        ready: false,
+        text: "AI assist is thinking..."
+      };
+    }
+
+    startAiAssistTimer(key, AI_DELAY_MS.optionThink, () => {
+      const activeKey = aiAssistKey();
+      if (activeKey !== key) return;
+      const advice = buildAiAssistAdvice();
+      state.aiAssistAdvice = advice
+        ? { key, ready: true, ...advice }
+        : { key, ready: true, text: "No recommendation available." };
+      render();
+    });
   }
 
   function maybeScheduleAiAction() {
@@ -1714,6 +1907,8 @@
 
   function endGame() {
     state.gameOver = true;
+    state.aiAssistAdvice = null;
+    clearAiAssistTimer();
     const highScore = Math.max(...state.players.map((player) => player.score));
     const winners = state.players.filter((player) => player.score === highScore).map((player) => player.name);
     addLog(`${winners.join(" and ")} wins with ${formatScore(highScore)}.`);
@@ -1794,16 +1989,19 @@
     const dice = document.getElementById("remote-turn-dice");
     const turn = state.turn;
     const isAiTurn = Boolean(turn && isCurrentTurnAi() && !state.gameOver);
+    const isAssistTurn = Boolean(turn && isCurrentTurnAiAssistedLocal() && !state.gameOver);
     const isRemoteTurn = Boolean(turn && isRoomMode() && !isCurrentTurnLocal() && !state.gameOver);
-    const shouldShow = isRemoteTurn || isAiTurn;
+    const shouldShow = isRemoteTurn || isAiTurn || isAssistTurn;
 
     panel.classList.toggle("hidden", !shouldShow);
     if (!shouldShow) return;
 
     panel.classList.toggle("zilch", turn.phase === "zilch");
-    label.textContent = isAiTurn ? "AI bot thinking" : "Waiting on another device";
-    title.textContent = `${turn.playerName}'s move`;
-    copy.textContent = remoteTurnSummary(turn);
+    panel.classList.toggle("assist", isAssistTurn);
+    const advice = isAssistTurn ? currentAiAssistAdvice() : null;
+    label.textContent = isAssistTurn ? (advice ? "AI assist" : "AI assist thinking") : isAiTurn ? "AI bot thinking" : "Waiting on another device";
+    title.textContent = isAssistTurn ? "Recommendation" : `${turn.playerName}'s move`;
+    copy.textContent = advice ? advice.text : isAssistTurn ? "AI assist is thinking..." : remoteTurnSummary(turn);
     dice.innerHTML = "";
 
     if (turn.dice.length) {
@@ -1837,6 +2035,12 @@
         badge.textContent = "AI bot";
         card.appendChild(badge);
       }
+      if (hasAiAssist(player)) {
+        card.classList.add("ai-assisted");
+        const badge = document.createElement("small");
+        badge.textContent = "AI Assist";
+        card.appendChild(badge);
+      }
       if (isRoomMode() && isPlayerOnThisDevice(player.name)) {
         const badge = document.createElement("small");
         badge.textContent = "This device";
@@ -1852,6 +2056,7 @@
     const turn = state.turn;
     if (!turn || turn.phase !== "choose-option") return;
     const localTurn = isCurrentTurnHumanLocal();
+    const advice = currentAiAssistAdvice();
 
     turn.options.forEach((option, index) => {
       const button = document.createElement("button");
@@ -1859,6 +2064,9 @@
       button.className = "option-card";
       if (turn.selectedOptionIndex === index) {
         button.classList.add(isCurrentTurnAi() ? "ai-choice" : "selected");
+      }
+      if (advice && advice.action === "option" && advice.optionIndex === index) {
+        button.classList.add("ai-recommendation");
       }
       button.disabled = !localTurn;
       if (!localTurn) button.classList.add("remote-option");
@@ -1911,14 +2119,20 @@
   function renderTurnControls() {
     const turn = state.turn;
     const offerPanel = document.getElementById("offer-panel");
+    const freshButton = document.getElementById("fresh-turn");
+    const buildButton = document.getElementById("build-turn");
     const rollButton = document.getElementById("roll-dice");
     const bankButton = document.getElementById("bank-turn");
     const rollPanel = document.getElementById("roll-panel");
     const rollMessage = document.getElementById("roll-message");
     const localTurn = isCurrentTurnHumanLocal();
+    const advice = currentAiAssistAdvice();
 
     offerPanel.classList.toggle("hidden", !turn || turn.phase !== "offer" || !localTurn);
     rollPanel.classList.toggle("hidden", !turn || turn.phase === "offer" || turn.phase === "game-over");
+    [freshButton, buildButton, rollButton, bankButton].forEach((button) => {
+      button.classList.remove("ai-recommendation");
+    });
 
     if (turn && turn.phase === "offer") {
       document.getElementById("offer-text").textContent =
@@ -1937,6 +2151,13 @@
     const bankText = turn && turn.phase === "zilch" ? "Accept Zilch" : "Bank";
     setButtonContents(rollButton, rollText);
     setButtonContents(bankButton, bankText);
+
+    if (advice) {
+      if (advice.action === "fresh") freshButton.classList.add("ai-recommendation");
+      if (advice.action === "build") buildButton.classList.add("ai-recommendation");
+      if (advice.action === "roll") rollButton.classList.add("ai-recommendation");
+      if (advice.action === "bank" || advice.action === "accept-zilch") bankButton.classList.add("ai-recommendation");
+    }
 
     if (!turn) {
       clearAutoChoiceTimer();
@@ -2014,6 +2235,7 @@
 
     renderScores();
     renderDice(turn ? turn.dice : []);
+    maybeScheduleAiAssist();
     renderRemoteTurnPanel();
     renderOptions();
     renderTurnControls();
@@ -2085,6 +2307,7 @@
 
   if (typeof document !== "undefined") {
     installNameInputBehavior();
+    installPlayerKindBehavior();
     installPlayerRemoveBehavior();
     bindEvents();
     window.ZILCH_RENDER_ROOM_SNAPSHOT = renderRoomSnapshot;

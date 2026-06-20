@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zilch</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23d89b2b'/%3E%3Ccircle cx='20' cy='20' r='5' fill='%23191816'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23191816'/%3E%3Ccircle cx='44' cy='44' r='5' fill='%23191816'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=20260620-carter-default">
+    <link rel="stylesheet" href="styles.css?v=20260620-ai-assist">
   </head>
   <body>
     <main class="app-shell">
@@ -47,12 +47,12 @@
               <div id="online-player-list" class="player-list compact-player-list">
                 <div class="player-entry" data-kind="human">
                   <input id="online-player-1" class="player-name-input online-player-name-input" type="text" value="Carter" autocomplete="off" spellcheck="false" aria-label="Online player 1">
-                  <span class="player-kind">Human</span>
+                  <button class="player-kind" type="button" aria-label="Enable AI assist">Human</button>
                   <button class="player-remove" type="button" aria-label="Remove online player 1">X</button>
                 </div>
                 <div class="player-entry" data-kind="human">
                   <input class="player-name-input online-player-name-input" type="text" value="" autocomplete="off" spellcheck="false" aria-label="Online player 2">
-                  <span class="player-kind">Human</span>
+                  <button class="player-kind" type="button" aria-label="Enable AI assist">Human</button>
                   <button class="player-remove" type="button" aria-label="Remove online player 2">X</button>
                 </div>
               </div>
@@ -86,12 +86,12 @@
           <div id="player-list" class="player-list">
             <div class="player-entry" data-kind="human">
               <input id="player-1" class="player-name-input" type="text" value="Carter" autocomplete="off" spellcheck="false" aria-label="Player 1">
-              <span class="player-kind">Human</span>
+              <button class="player-kind" type="button" aria-label="Enable AI assist">Human</button>
               <button class="player-remove" type="button" aria-label="Remove player 1">X</button>
             </div>
             <div class="player-entry" data-kind="human">
               <input class="player-name-input" type="text" value="" autocomplete="off" spellcheck="false" aria-label="Player 2">
-              <span class="player-kind">Human</span>
+              <button class="player-kind" type="button" aria-label="Enable AI assist">Human</button>
               <button class="player-remove" type="button" aria-label="Remove player 2">X</button>
             </div>
           </div>
@@ -219,7 +219,7 @@
       </section>
     </main>
 
-    <script src="firebase-config.js?v=20260620-carter-default"></script>
-    <script src="app.js?v=20260620-carter-default"></script>
+    <script src="firebase-config.js?v=20260620-ai-assist"></script>
+    <script src="app.js?v=20260620-ai-assist"></script>
   </body>
 </html>
