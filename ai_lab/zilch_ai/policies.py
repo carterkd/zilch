@@ -71,10 +71,22 @@ class GreedyThresholdPolicy(Policy):
 
 class EVPolicy(Policy):
     name = "ev"
+    closing_buffers = {
+        "low_free_dice": 2_500,
+        "mid_free_dice": 3_500,
+        "high_free_dice": 4_500,
+    }
 
     def __init__(self, table: EVTable | None = None, target_score: int = TARGET_SCORE) -> None:
         self.table = table or EVTable()
         self.target_score = target_score
+
+    def closing_lead_buffer(self, free_dice: int) -> int:
+        if free_dice >= 7:
+            return self.closing_buffers["high_free_dice"]
+        if free_dice >= 4:
+            return self.closing_buffers["mid_free_dice"]
+        return self.closing_buffers["low_free_dice"]
 
     def choose_build(self, view: TurnView) -> bool:
         if view.inherited_score <= 0:
@@ -99,7 +111,7 @@ class EVPolicy(Policy):
         if view.final_round and total_if_bank > other_best:
             return True
         if not view.final_round and total_if_bank >= self.target_score:
-            return True
+            return total_if_bank - other_best >= self.closing_lead_buffer(view.free_dice)
         if view.final_round and total_if_bank <= other_best:
             return False
         decision = self.table.choose_after_score(view.loose_score, view.free_dice)

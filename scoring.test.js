@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { calculateScoreRecursive, rollDice, rollForFirst, parsePlayers } = require("./app");
+const { calculateScoreRecursive, rollDice, rollForFirst, parsePlayers, aiClosingLeadBuffer } = require("./app");
 
 function scores(dice) {
   return calculateScoreRecursive(dice.slice().sort((a, b) => a - b)).map((combo) => ({
@@ -27,7 +27,13 @@ function lacks(dice, points, used, free) {
 }
 
 assert.deepStrictEqual(parsePlayers("A\nB\nA\n\nC"), ["A", "B", "C"]);
-assert.deepStrictEqual(parsePlayers(["   ", ""]), ["Kent", "Sonja"]);
+assert.deepStrictEqual(parsePlayers(["   ", ""]), ["Carter"]);
+assert.strictEqual(aiClosingLeadBuffer(1), 2500);
+assert.strictEqual(aiClosingLeadBuffer(3), 2500);
+assert.strictEqual(aiClosingLeadBuffer(4), 3500);
+assert.strictEqual(aiClosingLeadBuffer(6), 3500);
+assert.strictEqual(aiClosingLeadBuffer(7), 4500);
+assert.strictEqual(aiClosingLeadBuffer(10), 4500);
 assert.strictEqual(rollForFirst(["Solo"]).names[0], "Solo");
 for (let i = 0; i < 100; i += 1) {
   const roll = rollDice(10);

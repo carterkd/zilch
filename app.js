@@ -13,7 +13,7 @@
   const TABLE_LOG_LIMIT = 50;
   const FIREBASE_SDK_VERSION = "12.15.0";
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const ONLINE_DEFAULT_PLAYERS = ["Sonja", ""];
+  const ONLINE_DEFAULT_PLAYERS = ["Carter", ""];
   const AI_DEFAULT_NAMES = [
     "DiceGPT",
     "Zilchbot 9000",
@@ -70,6 +70,11 @@
   const EV_STEP = 50;
   const EV_MAX_LOOSE = 8000;
   const EV_HORIZON = 5;
+  const AI_CLOSING_BUFFERS = {
+    lowFreeDice: 2500,
+    midFreeDice: 3500,
+    highFreeDice: 4500
+  };
   const evRollCache = new Map();
   const evOutcomeCache = new Map();
   const factorials = Array.from({ length: 11 }, (_, index) => {
@@ -402,6 +407,12 @@
     };
   }
 
+  function aiClosingLeadBuffer(freeDice) {
+    if (freeDice >= 7) return AI_CLOSING_BUFFERS.highFreeDice;
+    if (freeDice >= 4) return AI_CLOSING_BUFFERS.midFreeDice;
+    return AI_CLOSING_BUFFERS.lowFreeDice;
+  }
+
   function evOptionDecision(looseScore, option) {
     const nextLoose = looseScore + option.points;
     if (option.remainingDice.length === 0) {
@@ -432,7 +443,7 @@
     return best;
   }
 
-  function parsePlayers(rawNames, fallback = ["Kent", "Sonja"]) {
+  function parsePlayers(rawNames, fallback = ["Carter"]) {
     const unique = [];
     const names = Array.isArray(rawNames) ? rawNames : String(rawNames).split(/\n|,/);
     names
@@ -457,8 +468,7 @@
   }
 
   function parsePlayerEntries(rawPlayers, fallback = [
-    { name: "Kent", isAi: false },
-    { name: "Sonja", isAi: false }
+    { name: "Carter", isAi: false }
   ]) {
     const unique = [];
     listValues(rawPlayers).forEach((rawPlayer) => {
@@ -648,11 +658,29 @@
     kind.className = "player-kind";
     kind.textContent = isAi ? "AI" : "Human";
 
-    entry.append(input, kind);
+    const remove = document.createElement("button");
+    remove.className = "player-remove";
+    remove.type = "button";
+    remove.textContent = "X";
+    remove.setAttribute("aria-label", `Remove ${isAi ? "AI" : "player"} ${list.children.length + 1}`);
+
+    entry.append(input, kind, remove);
     list.appendChild(entry);
     installNameInputBehavior(entry);
+    installPlayerRemoveBehavior(entry);
     input.focus();
     input.select();
+  }
+
+  function installPlayerRemoveBehavior(root = document) {
+    root.querySelectorAll(".player-remove").forEach((button) => {
+      if (button.dataset.removeReady === "true") return;
+      button.dataset.removeReady = "true";
+      button.addEventListener("click", () => {
+        const entry = button.closest(".player-entry");
+        if (entry) entry.remove();
+      });
+    });
   }
 
   function addLocalPlayerEntry(value = "", isAi = false) {
@@ -1526,9 +1554,22 @@
     }
 
     if (!view.finalRound && totalIfBank >= TARGET_SCORE) {
+      const lead = totalIfBank - otherBest;
+      const neededLead = aiClosingLeadBuffer(view.freeDice);
+      if (lead < neededLead) {
+        return {
+          bank: false,
+          reason:
+            `banking reaches ${formatScore(totalIfBank)}, but only leads by ${formatScore(lead)} ` +
+            `and wants ${formatScore(neededLead)} with ${view.freeDice} free dice`
+        };
+      }
+
       return {
         bank: true,
-        reason: `banking reaches the ${formatScore(TARGET_SCORE)} target`
+        reason:
+          `banking reaches ${formatScore(totalIfBank)} with a ${formatScore(lead)} lead ` +
+          `over the ${formatScore(TARGET_SCORE)} target`
       };
     }
 
@@ -2044,6 +2085,7 @@
 
   if (typeof document !== "undefined") {
     installNameInputBehavior();
+    installPlayerRemoveBehavior();
     bindEvents();
     window.ZILCH_RENDER_ROOM_SNAPSHOT = renderRoomSnapshot;
   }
@@ -2054,6 +2096,7 @@
       rollDice,
       rollForFirst,
       parsePlayers,
+      aiClosingLeadBuffer,
       renderRoomSnapshot
     };
   }
