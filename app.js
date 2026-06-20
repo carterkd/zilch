@@ -173,7 +173,7 @@
     {
       title: "People, rooms, and AI",
       copy:
-        "Play on one device, create a room code for multiple devices, add AI bots, toggle AI speed, or turn on AI Assist for a human player to see recommendations.",
+        "Play on one device, create a room code for multiple devices, add AI bots, toggle AI speed, or turn on AI Assist for a human player to see recommendations. (Click Human or AI beside a name to toggle.)",
       dice: [6, 6, 6],
       stats: [
         ["Human", "You decide"],
