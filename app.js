@@ -460,25 +460,27 @@
 
   function normalizePlayerEntry(player, fallbackAi = false) {
     if (typeof player === "string") {
-      return { name: player.trim(), score: 0, isAi: fallbackAi, aiAssist: false };
+      return { name: player.trim(), score: 0, isAi: fallbackAi, aiAssist: false, aiSpeed: false };
     }
 
+    const isAi = Boolean(player && player.isAi);
     return {
       name: String(player && player.name ? player.name : "").trim(),
       score: Number(player && player.score ? player.score : 0),
-      isAi: Boolean(player && player.isAi),
-      aiAssist: Boolean(player && player.aiAssist && !player.isAi)
+      isAi,
+      aiAssist: Boolean(player && player.aiAssist && !isAi),
+      aiSpeed: Boolean(player && player.aiSpeed && isAi)
     };
   }
 
   function parsePlayerEntries(rawPlayers, fallback = [
-    { name: "Carter", isAi: false, aiAssist: false }
+    { name: "Carter", isAi: false, aiAssist: false, aiSpeed: false }
   ]) {
     const unique = [];
     listValues(rawPlayers).forEach((rawPlayer) => {
       const player = normalizePlayerEntry(rawPlayer);
       if (!player.name || unique.some((item) => item.name === player.name)) return;
-      unique.push({ name: player.name, isAi: player.isAi, aiAssist: player.aiAssist });
+      unique.push({ name: player.name, isAi: player.isAi, aiAssist: player.aiAssist, aiSpeed: player.aiSpeed });
     });
     return unique.length ? unique : fallback.map((player) => ({ ...player }));
   }
@@ -642,6 +644,7 @@
   }
 
   function playerKindText(kind) {
+    if (kind === "ai-speed") return "AI (speed)";
     if (kind === "ai") return "AI";
     if (kind === "assist") return "Human (AI assist)";
     return "Human";
@@ -649,13 +652,16 @@
 
   function updatePlayerEntryKind(entry, kind = entry.dataset.kind || "human") {
     entry.dataset.kind = kind;
-    entry.classList.toggle("ai", kind === "ai");
+    entry.classList.toggle("ai", kind === "ai" || kind === "ai-speed");
+    entry.classList.toggle("ai-speed", kind === "ai-speed");
     entry.classList.toggle("assist", kind === "assist");
     const button = entry.querySelector(".player-kind");
     if (button) {
       button.textContent = playerKindText(kind);
-      button.disabled = kind === "ai";
-      button.setAttribute("aria-label", kind === "assist" ? "Disable AI assist" : "Enable AI assist");
+      button.disabled = false;
+      if (kind === "ai") button.setAttribute("aria-label", "Enable AI speed");
+      else if (kind === "ai-speed") button.setAttribute("aria-label", "Disable AI speed");
+      else button.setAttribute("aria-label", kind === "assist" ? "Disable AI assist" : "Enable AI assist");
     }
   }
 
@@ -703,7 +709,11 @@
       button.dataset.kindReady = "true";
       button.addEventListener("click", () => {
         const entry = button.closest(".player-entry");
-        if (!entry || entry.dataset.kind === "ai") return;
+        if (!entry) return;
+        if (entry.dataset.kind === "ai" || entry.dataset.kind === "ai-speed") {
+          updatePlayerEntryKind(entry, entry.dataset.kind === "ai-speed" ? "ai" : "ai-speed");
+          return;
+        }
         updatePlayerEntryKind(entry, entry.dataset.kind === "assist" ? "human" : "assist");
       });
       const entry = button.closest(".player-entry");
@@ -753,27 +763,29 @@
   function getSetupPlayers() {
     const entries = Array.from(document.querySelectorAll("#player-list .player-entry")).map((entry) => ({
       name: entry.querySelector(".player-name-input") ? entry.querySelector(".player-name-input").value : "",
-      isAi: entry.dataset.kind === "ai",
-      aiAssist: entry.dataset.kind === "assist"
+      isAi: entry.dataset.kind === "ai" || entry.dataset.kind === "ai-speed",
+      aiAssist: entry.dataset.kind === "assist",
+      aiSpeed: entry.dataset.kind === "ai-speed"
     }));
 
     if (entries.length) return parsePlayerEntries(entries);
 
     return parsePlayers(Array.from(document.querySelectorAll("#player-list .player-name-input")).map((input) => input.value))
-      .map((name) => ({ name, isAi: false, aiAssist: false }));
+      .map((name) => ({ name, isAi: false, aiAssist: false, aiSpeed: false }));
   }
 
   function getOnlineDevicePlayers() {
     const entries = Array.from(document.querySelectorAll("#online-player-list .player-entry")).map((entry) => ({
       name: entry.querySelector(".player-name-input") ? entry.querySelector(".player-name-input").value : "",
-      isAi: entry.dataset.kind === "ai",
-      aiAssist: entry.dataset.kind === "assist"
+      isAi: entry.dataset.kind === "ai" || entry.dataset.kind === "ai-speed",
+      aiAssist: entry.dataset.kind === "assist",
+      aiSpeed: entry.dataset.kind === "ai-speed"
     }));
 
     if (entries.length) return parsePlayerEntries(entries, []);
 
     return parsePlayers(Array.from(document.querySelectorAll("#online-player-list .player-name-input")).map((input) => input.value), [])
-      .map((name) => ({ name, isAi: false, aiAssist: false }));
+      .map((name) => ({ name, isAi: false, aiAssist: false, aiSpeed: false }));
   }
 
   function showSetupScreen() {
@@ -1098,12 +1110,20 @@
     return Boolean(player && player.isAi);
   }
 
+  function isAiSpeedPlayer(player) {
+    return Boolean(player && player.isAi && player.aiSpeed);
+  }
+
   function hasAiAssist(player) {
     return Boolean(player && player.aiAssist && !player.isAi);
   }
 
   function isCurrentTurnAi() {
     return isAiPlayer(currentPlayer());
+  }
+
+  function isCurrentTurnAiSpeed() {
+    return isAiSpeedPlayer(currentPlayer());
   }
 
   function isCurrentTurnAiAssistedLocal() {
@@ -1141,7 +1161,13 @@
   function startGameFromOrder(orderedNames, orderDetail, roomContext = { mode: "local", devicePlayers: [] }) {
     state.players = orderedNames.map((player) => {
       const normalized = normalizePlayerEntry(player);
-      return { name: normalized.name, score: 0, isAi: normalized.isAi, aiAssist: normalized.aiAssist };
+      return {
+        name: normalized.name,
+        score: 0,
+        isAi: normalized.isAi,
+        aiAssist: normalized.aiAssist,
+        aiSpeed: normalized.aiSpeed
+      };
     });
     state.currentIndex = 0;
     state.finalRound = false;
@@ -1167,17 +1193,19 @@
   function normalizeSnapshotPlayers(players) {
     const rawPlayers = listValues(players);
     if (!rawPlayers.length) {
-      return parsePlayers([]).map((name) => ({ name, score: 0, isAi: false, aiAssist: false }));
+      return parsePlayers([]).map((name) => ({ name, score: 0, isAi: false, aiAssist: false, aiSpeed: false }));
     }
 
     return rawPlayers
       .map((player) => {
-        if (typeof player === "string") return { name: player.trim(), score: 0, isAi: false, aiAssist: false };
+        if (typeof player === "string") return { name: player.trim(), score: 0, isAi: false, aiAssist: false, aiSpeed: false };
+        const isAi = Boolean(player.isAi);
         return {
           name: String(player.name || "").trim(),
           score: Number(player.score || 0),
-          isAi: Boolean(player.isAi),
-          aiAssist: Boolean(player.aiAssist && !player.isAi)
+          isAi,
+          aiAssist: Boolean(player.aiAssist && !isAi),
+          aiSpeed: Boolean(player.aiSpeed && isAi)
         };
       })
       .filter((player) => player.name);
@@ -1269,7 +1297,7 @@
       chip.appendChild(label);
       if (player.isAi) {
         const ai = document.createElement("small");
-        ai.textContent = "AI bot";
+        ai.textContent = isAiSpeedPlayer(player) ? "AI speed" : "AI bot";
         chip.appendChild(ai);
       }
       if (hasAiAssist(player)) {
@@ -1304,7 +1332,13 @@
   function createInitialGameSnapshot(orderedNames, orderDetail) {
     const players = orderedNames.map((player) => {
       const normalized = normalizePlayerEntry(player);
-      return { name: normalized.name, score: 0, isAi: normalized.isAi, aiAssist: normalized.aiAssist };
+      return {
+        name: normalized.name,
+        score: 0,
+        isAi: normalized.isAi,
+        aiAssist: normalized.aiAssist,
+        aiSpeed: normalized.aiSpeed
+      };
     });
     const first = players[0];
     return {
@@ -1356,7 +1390,8 @@
         name: player.name,
         score: player.score,
         isAi: player.isAi,
-        aiAssist: player.aiAssist
+        aiAssist: player.aiAssist,
+        aiSpeed: player.aiSpeed
       })),
       currentIndex: state.currentIndex,
       finalRound: state.finalRound,
@@ -1590,6 +1625,10 @@
     };
   }
 
+  function aiActionDelay(name) {
+    return isCurrentTurnAiSpeed() ? 0 : AI_DELAY_MS[name];
+  }
+
   function startAiAssistTimer(key, delayMs, action) {
     if (state.aiAssistAction && state.aiAssistAction.key === key) return;
     clearAiAssistTimer();
@@ -1800,7 +1839,7 @@
 
     if (turn.phase === "offer") {
       const key = `ai:offer:${state.currentIndex}:${state.inheritedScore}:${state.inheritedFreeDice}`;
-      startAiActionTimer(key, AI_DELAY_MS.offer, () => {
+      startAiActionTimer(key, aiActionDelay("offer"), () => {
         const decision = aiShouldBuild();
         addLog(
           `${turn.playerName} compares build ${formatScore(Math.round(decision.buildValue))} EV vs fresh ` +
@@ -1813,7 +1852,7 @@
 
     if (turn.phase === "await-roll") {
       const key = `ai:roll:${state.currentIndex}:${turn.freeDice}:${turn.lockedPoints}:${turn.looseScore}:${turn.rollId || 0}`;
-      startAiActionTimer(key, AI_DELAY_MS.roll, () => {
+      startAiActionTimer(key, aiActionDelay("roll"), () => {
         addLog(`${turn.playerName} rolls ${turn.freeDice} dice.`);
         rollForTurn();
       });
@@ -1827,14 +1866,14 @@
       }
 
       const key = `ai:choose-option:${state.currentIndex}:${rollId}`;
-      startAiActionTimer(key, AI_DELAY_MS.optionThink, () => {
+      startAiActionTimer(key, aiActionDelay("optionThink"), () => {
         const choice = bestEvOption(turn);
         if (!choice) return;
         turn.selectedOptionIndex = choice.index;
         turn.aiExplanation = describeOptionChoice(choice);
         addLog(turn.aiExplanation);
         renderAndSync();
-        startAiActionTimer(`ai:take-option:${state.currentIndex}:${rollId}:${choice.index}`, AI_DELAY_MS.optionTake, () => {
+        startAiActionTimer(`ai:take-option:${state.currentIndex}:${rollId}:${choice.index}`, aiActionDelay("optionTake"), () => {
           selectOption(choice.index);
         });
       });
@@ -1845,7 +1884,7 @@
       const decision = aiShouldBank();
       const key = `ai:next:${state.currentIndex}:${turn.freeDice}:${turn.lockedPoints}:${turn.looseScore}:${turn.rollId || 0}`;
       turn.aiExplanation = `${turn.playerName} is deciding whether to bank or roll: ${decision.reason}.`;
-      startAiActionTimer(key, AI_DELAY_MS.next, () => {
+      startAiActionTimer(key, aiActionDelay("next"), () => {
         addLog(`${turn.playerName} ${decision.bank ? "banks" : "keeps rolling"} because ${decision.reason}.`);
         if (decision.bank) finishTurn(false);
         else rollForTurn();
@@ -1855,7 +1894,7 @@
 
     if (turn.phase === "zilch") {
       const key = `ai:zilch:${state.currentIndex}:${turn.rollId || 0}`;
-      startAiActionTimer(key, AI_DELAY_MS.zilch, () => finishTurn(true));
+      startAiActionTimer(key, aiActionDelay("zilch"), () => finishTurn(true));
       return;
     }
 
@@ -2000,7 +2039,11 @@
     panel.classList.toggle("zilch", turn.phase === "zilch");
     panel.classList.toggle("assist", isAssistTurn);
     const advice = isAssistTurn ? currentAiAssistAdvice() : null;
-    label.textContent = isAssistTurn ? (advice ? "AI assist" : "AI assist thinking") : isAiTurn ? "AI bot thinking" : "Waiting on another device";
+    label.textContent = isAssistTurn
+      ? (advice ? "AI assist" : "AI assist thinking")
+      : isAiTurn
+        ? (isCurrentTurnAiSpeed() ? "AI speed" : "AI bot thinking")
+        : "Waiting on another device";
     title.textContent = isAssistTurn ? "Recommendation" : `${turn.playerName}'s move`;
     copy.textContent = advice ? advice.text : isAssistTurn ? "AI assist is thinking..." : remoteTurnSummary(turn);
     dice.innerHTML = "";
@@ -2033,7 +2076,7 @@
       card.append(name, score);
       if (player.isAi) {
         const badge = document.createElement("small");
-        badge.textContent = "AI bot";
+        badge.textContent = isAiSpeedPlayer(player) ? "AI speed" : "AI bot";
         card.appendChild(badge);
       }
       if (hasAiAssist(player)) {

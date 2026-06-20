@@ -393,12 +393,14 @@ button:disabled {
 }
 
 .player-entry.ai,
+.player-entry.ai-speed,
 .player-entry.assist {
   border-color: rgb(45 92 136 / 32%);
   background: linear-gradient(180deg, #fff, #eef4f7);
 }
 
 .player-entry.ai .player-kind,
+.player-entry.ai-speed .player-kind,
 .player-entry.assist .player-kind,
 .score-card.ai-player small,
 .score-card.ai-assisted small {
