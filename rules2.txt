@@ -28,9 +28,10 @@ Be the first player to reach 20,000 points. If someone reaches 20,000, all other
   - Three 5's: 500 points.
   - Three 6's: 600 points.
 
-- **Four or More of Any Number:**
-  - 4 of any number: 1,000 points.
-  - 5 of any number: 2,000 points.
+- **Four or More of a Kind:**
+  - 4 1's: 1,100 points (three 1's plus one single 1).
+  - 4 of any other number: 1,000 points.
+  - 5 of any number, including 1's: 2,000 points.
   - 6 of any number: 3,000 points.
   - 7 of any number: 4,000 points.
   - 8 of any number: 5,000 points.

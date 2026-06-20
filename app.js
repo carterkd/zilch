@@ -93,11 +93,12 @@
     {
       title: "Triples and bigger sets",
       copy:
-        "Three 1s score 1,000. Three 2s through 6s score face value times 100. For 4 to 10 of a kind, score 1,000 for four, then add 1,000 for each extra die.",
+        "Three 1s score 1,000, and four 1s score 1,100 because the extra 1 is worth 100. Three 2s through 6s score face value times 100. Four of any non-1 number scores 1,000; five to ten of any number score 2,000 up to 7,000.",
       dice: [5, 5, 5, 2, 2, 2],
       stats: [
+        ["Four 1s", "1,100"],
         ["Three 5s", "500"],
-        ["Four of a kind", "1,000"],
+        ["Four non-1s", "1,000"],
         ["Ten of a kind", "7,000"]
       ]
     },
